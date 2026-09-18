@@ -57,8 +57,8 @@ impl ResourceRepository {
                 dr.reserved_quantity,
                 (dr.current_quantity - dr.reserved_quantity) as available_quantity,
                 dr.min_retention_pct,
-                CAST(CEIL(dr.initial_quantity * dr.min_retention_pct) AS INTEGER) as min_retained_quantity,
-                MAX(0, (dr.current_quantity - dr.reserved_quantity) - CAST(CEIL(dr.initial_quantity * dr.min_retention_pct) AS INTEGER)) as transferable_quantity
+                CAST((dr.initial_quantity * dr.min_retention_pct + 0.999999) AS INTEGER) as min_retained_quantity,
+                MAX(0, (dr.current_quantity - dr.reserved_quantity) - CAST((dr.initial_quantity * dr.min_retention_pct + 0.999999) AS INTEGER)) as transferable_quantity
             FROM district_resources dr
             JOIN districts d ON dr.district_id = d.id
             JOIN resource_types rt ON dr.resource_type_id = rt.id
