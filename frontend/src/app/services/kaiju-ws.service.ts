@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, isDevMode } from '@angular/core';
 import { Subject } from 'rxjs';
 import { TacticalAlert, WsMessage } from '../models/kaiju.models';
 
@@ -60,10 +60,12 @@ export class KaijuWsService {
   }
 
   private resolveWsUrl(): string {
+    if (isDevMode()) {
+      return 'ws://localhost:8080/ws';
+    }
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.port === '4200' ? 'localhost:8080' : window.location.host;
-      return `${protocol}//${host}/ws`;
+      return `${protocol}//${window.location.host}/ws`;
     }
     return 'ws://localhost:8080/ws';
   }

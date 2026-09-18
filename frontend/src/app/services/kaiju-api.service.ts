@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, isDevMode } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
@@ -18,7 +18,7 @@ export class KaijuApiService {
   private baseUrl = this.resolveBaseUrl();
 
   private resolveBaseUrl(): string {
-    if (typeof window !== 'undefined' && window.location.port === '4200') {
+    if (isDevMode()) {
       return 'http://localhost:8080/api';
     }
     return '/api';

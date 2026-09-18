@@ -1,25 +1,16 @@
-# =============================================================================
-# KAIJU - Crisis Manager : Backend Rust Dockerfile (Multi-stage Build)
-# =============================================================================
-
-# --- Stage 1 : Build ---
-FROM rust:1.80-bookworm AS builder
+FROM rust:bookworm AS builder
 
 WORKDIR /usr/src/kaiju-backend
 
-# Créer un projet fictif pour pré-cacher les dépendances
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock* ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release || true
 
-# Copier le code source réel et les migrations
 COPY src ./src
 COPY migrations ./migrations
 
-# Forcer le re-build du code source
-RUN touch src/main.rs && cargo build --release
+RUN rm -f target/release/deps/kaiju_backend* && cargo build --release
 
-# --- Stage 2 : Runtime Minimal ---
 FROM debian:bookworm-slim AS runtime
 
 WORKDIR /app
@@ -30,11 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copier le binaire compilé
 COPY --from=builder /usr/src/kaiju-backend/target/release/kaiju-backend /app/kaiju-backend
 COPY --from=builder /usr/src/kaiju-backend/migrations /app/migrations
 
-# Création du répertoire pour la base SQLite persistante
 RUN mkdir -p /app/data
 
 EXPOSE 8080

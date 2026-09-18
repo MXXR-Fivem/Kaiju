@@ -1,12 +1,6 @@
-# =============================================================================
-# KAIJU - Crisis Manager (Tokyork Emergency Response System)
-# Makefile d'Orchestration et d'Exploitation Opérationnelle
-# =============================================================================
-
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-# Couleurs pour le terminal
 CYAN    := \033[36m
 GREEN   := \033[32m
 YELLOW  := \033[33m
