@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { UserRole } from '../models/kaiju.models';
+import { TacticalLayer, UserRole } from '../models/kaiju.models';
 
 export interface TacticalUser {
   id: string;
@@ -25,6 +25,9 @@ export class CrisisContextService {
   readonly currentUser = signal<TacticalUser>(PRESET_OPERATORS[0]); // Par défaut CD
   readonly activeDisasterLevel = signal<number>(1);
   readonly selectedDistrictCode = signal<string | null>(null);
+
+  // Calque tactique actif de visualisation sur la carte (Global, Power, Water, Food, Medical, Heavy Gear)
+  readonly activeTacticalLayer = signal<TacticalLayer>('GLOBAL');
 
   // Modales d'action
   readonly isTransferModalOpen = signal<boolean>(false);
@@ -62,5 +65,9 @@ export class CrisisContextService {
 
   selectDistrict(code: string | null): void {
     this.selectedDistrictCode.set(code);
+  }
+
+  setTacticalLayer(layer: TacticalLayer): void {
+    this.activeTacticalLayer.set(layer);
   }
 }

@@ -64,3 +64,57 @@ html, body {
     opacity: 0;
   }
 }
+
+/* Animations des Câbles Électriques & Conduites */
+@keyframes electric-flow {
+  0% {
+    stroke-dashoffset: 40;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.electric-cable-on {
+  stroke-dasharray: 8, 4;
+  animation: electric-flow 1.2s linear infinite;
+  filter: drop-shadow(0 0 6px #38bdf8);
+}
+
+.electric-cable-off {
+  stroke-dasharray: 4, 8;
+  stroke: #ef4444 !important;
+  opacity: 0.85;
+  animation: cable-failure 1s infinite alternate;
+}
+
+@keyframes cable-failure {
+  0% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #ef4444);
+  }
+}
+
+.water-pipe-flow {
+  stroke-dasharray: 6, 6;
+  animation: electric-flow 2s linear infinite;
+  filter: drop-shadow(0 0 4px #0284c7);
+}
+
+/* Marqueur de Convoi Logistique en Transit */
+.convoi-marker {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  font-family: monospace;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

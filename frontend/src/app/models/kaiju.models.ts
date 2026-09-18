@@ -4,6 +4,68 @@ export type RouteType = 'LAND' | 'SEA';
 export type TransferStatus = 'PENDING' | 'APPROVED' | 'IN_TRANSIT' | 'DELIVERED' | 'REJECTED' | 'CANCELLED';
 export type TransitApprovalStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
+export type TacticalLayer = 'GLOBAL' | 'POWER' | 'WATER' | 'FOOD' | 'MEDICAL' | 'HEAVY_GEAR';
+
+export interface TacticalLayerConfig {
+  id: TacticalLayer;
+  label: string;
+  sublabel: string;
+  icon: string;
+  color: string;
+  resourceCodes: string[];
+}
+
+export const TACTICAL_LAYERS: TacticalLayerConfig[] = [
+  {
+    id: 'GLOBAL',
+    label: 'Global QG',
+    sublabel: 'Vue d\'ensemble tactique',
+    icon: '🌐',
+    color: '#38bdf8',
+    resourceCodes: []
+  },
+  {
+    id: 'POWER',
+    label: 'Électricité & Énergie',
+    sublabel: 'Câbles H.T. & Générateurs',
+    icon: '⚡',
+    color: '#fbbf24',
+    resourceCodes: ['GENERATOR', 'FUEL']
+  },
+  {
+    id: 'WATER',
+    label: 'Eau & Filtration',
+    sublabel: 'Aqueducs & Stations',
+    icon: '💧',
+    color: '#0284c7',
+    resourceCodes: ['WATER', 'WATER_PURIFIER']
+  },
+  {
+    id: 'FOOD',
+    label: 'Vivres & Rations',
+    sublabel: 'Chaîne de subsistance',
+    icon: '🍞',
+    color: '#f97316',
+    resourceCodes: ['FOOD']
+  },
+  {
+    id: 'MEDICAL',
+    label: 'Médical & Soins',
+    sublabel: 'Kits & Brigades mobiles',
+    icon: '🏥',
+    color: '#ef4444',
+    resourceCodes: ['MED_KIT', 'MEDIC']
+  },
+  {
+    id: 'HEAVY_GEAR',
+    label: 'Abris & Logistique',
+    sublabel: 'Tentes, 4x4 & Déblaiement',
+    icon: '🚜',
+    color: '#a855f7',
+    resourceCodes: ['SHELTER', 'ATV', 'CLEARING_GEAR']
+  }
+];
+
 export interface District {
   id: string;
   code: string;
