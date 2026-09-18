@@ -5,59 +5,66 @@
 @tailwind utilities;
 
 :root {
-  --crisis-accent: #38bdf8;
-  --crisis-glow: rgba(56, 189, 248, 0.2);
+  --crisis-accent: #22c55e;
+  --crisis-glow: rgba(34, 197, 94, 0.2);
 }
 
 html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #07090e;
-  color: #e2e8f0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: #000000;
+  color: #e4e4e7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
   overflow: hidden;
   user-select: none;
 }
 
+* {
+  border-radius: 0px !important;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b0f19;
+  background: #09090b;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 3px;
+  background: #27272a;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #22c55e;
 }
 
 .leaflet-container {
-  background: #07090e !important;
-  font-family: inherit;
+  background: #000000 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
-.kaiju-radar-marker {
+.leaflet-tile {
+  filter: brightness(0.75) contrast(1.4) grayscale(0.85);
+}
+
+.military-reticle {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
 }
 
 .radar-ping {
   position: absolute;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation: radar-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 @keyframes radar-ping {
   75%, 100% {
-    transform: scale(2.5);
+    transform: scale(2.2);
     opacity: 0;
   }
 }
@@ -72,13 +79,13 @@ html, body {
 }
 
 .electric-cable-on {
-  stroke-dasharray: 8, 4;
-  animation: electric-flow 1.2s linear infinite;
-  filter: drop-shadow(0 0 6px #38bdf8);
+  stroke-dasharray: 6, 3;
+  animation: electric-flow 1s linear infinite;
+  filter: drop-shadow(0 0 4px #22c55e);
 }
 
 .electric-cable-off {
-  stroke-dasharray: 4, 8;
+  stroke-dasharray: 4, 6;
   stroke: #ef4444 !important;
   opacity: 0.85;
   animation: cable-failure 1s infinite alternate;
@@ -90,7 +97,7 @@ html, body {
   }
   100% {
     opacity: 1;
-    filter: drop-shadow(0 0 8px #ef4444);
+    filter: drop-shadow(0 0 6px #ef4444);
   }
 }
 
@@ -101,15 +108,27 @@ html, body {
 }
 
 .convoi-marker {
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid #38bdf8;
-  border-radius: 6px;
+  background: #000000;
+  border: 1px solid #22c55e;
   padding: 2px 6px;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 10px;
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.hud-window-shadow {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.9), 0 8px 10px -6px rgba(0, 0, 0, 0.9);
+}
+
+.hud-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
+  background: linear-gradient(135deg, transparent 50%, #22c55e 50%);
 }

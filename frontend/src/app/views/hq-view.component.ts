@@ -1,12 +1,13 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MapComponent } from '../components/map/map.component';
-import { NavbarLeftComponent } from '../components/navbar-left/navbar-left.component';
-import { NavbarRightComponent } from '../components/navbar-right/navbar-right.component';
-import { TransferModalComponent } from '../components/modals/transfer-modal.component';
-import { ReservationModalComponent } from '../components/modals/reservation-modal.component';
-import { InventoryModalComponent } from '../components/modals/inventory-modal.component';
-import { CalendarModalComponent } from '../components/modals/calendar-modal.component';
+import { HudTopbarComponent } from '../components/hud-topbar/hud-topbar.component';
+import { HudWindowComponent } from '../components/hud-window/hud-window.component';
+import { AlertsPanelComponent } from '../components/panels/alerts-panel.component';
+import { InventoryPanelComponent } from '../components/panels/inventory-panel.component';
+import { TransfersPanelComponent } from '../components/panels/transfers-panel.component';
+import { ReservationsPanelComponent } from '../components/panels/reservations-panel.component';
+import { CalendarPanelComponent } from '../components/panels/calendar-panel.component';
 import { CrisisContextService } from '../services/crisis-context.service';
 
 @Component({
@@ -15,28 +16,41 @@ import { CrisisContextService } from '../services/crisis-context.service';
   imports: [
     CommonModule,
     MapComponent,
-    NavbarLeftComponent,
-    NavbarRightComponent,
-    TransferModalComponent,
-    ReservationModalComponent,
-    InventoryModalComponent,
-    CalendarModalComponent
+    HudTopbarComponent,
+    HudWindowComponent,
+    AlertsPanelComponent,
+    InventoryPanelComponent,
+    TransfersPanelComponent,
+    ReservationsPanelComponent,
+    CalendarPanelComponent
   ],
   template: `
-    <div class="relative w-screen h-screen flex overflow-hidden select-none"
-         [ngClass]="context.crisisThemeClass()">
-      <app-navbar-left></app-navbar-left>
+    <div class="relative w-screen h-screen overflow-hidden bg-black font-mono select-none">
+      <app-hud-topbar></app-hud-topbar>
 
-      <main class="flex-1 h-full relative overflow-hidden">
+      <main class="fixed inset-0 w-full h-full z-0 pt-10">
         <app-map></app-map>
       </main>
 
-      <app-navbar-right></app-navbar-right>
+      <app-hud-window windowId="alerts">
+        <app-alerts-panel></app-alerts-panel>
+      </app-hud-window>
 
-      <app-transfer-modal></app-transfer-modal>
-      <app-reservation-modal></app-reservation-modal>
-      <app-inventory-modal></app-inventory-modal>
-      <app-calendar-modal></app-calendar-modal>
+      <app-hud-window windowId="inventory">
+        <app-inventory-panel></app-inventory-panel>
+      </app-hud-window>
+
+      <app-hud-window windowId="transfers">
+        <app-transfers-panel></app-transfers-panel>
+      </app-hud-window>
+
+      <app-hud-window windowId="reservations">
+        <app-reservations-panel></app-reservations-panel>
+      </app-hud-window>
+
+      <app-hud-window windowId="calendar">
+        <app-calendar-panel></app-calendar-panel>
+      </app-hud-window>
     </div>
   `
 })

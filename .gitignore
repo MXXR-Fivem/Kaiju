@@ -1,16 +1,13 @@
-# Dependencies
 node_modules/
 target/
 .pnp
 .pnp.js
 
-# Environment and secrets
 .env
 .env.local
 .env.*.local
 *.pem
 
-# SQLite database files
 *.db
 *.db-journal
 *.db-shm
@@ -21,7 +18,6 @@ backend/kaiju.db-shm
 backend/kaiju.db-wal
 data/
 
-# IDE and OS files
 .DS_Store
 Thumbs.db
 .idea/
@@ -29,12 +25,12 @@ Thumbs.db
 *.swp
 *.swo
 
-# Angular build outputs
 frontend/.angular/
 frontend/dist/
 
-# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+
+sujet/
