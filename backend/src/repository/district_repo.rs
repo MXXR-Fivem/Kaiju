@@ -55,6 +55,7 @@ impl DistrictRepository {
         Ok(district)
     }
 
+    #[allow(dead_code)]
     pub async fn update_disaster_level(&self, district_id: &str, level: i64) -> Result<(), AppError> {
         sqlx::query(
             r#"

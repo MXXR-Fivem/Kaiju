@@ -27,6 +27,7 @@ impl DisasterRepository {
         Ok(disaster)
     }
 
+    #[allow(dead_code)]
     pub async fn find_all_history(&self) -> Result<Vec<DisasterEvent>, AppError> {
         let list = sqlx::query_as::<_, DisasterEvent>(
             r#"

@@ -75,6 +75,7 @@ impl WsHub {
         }
     }
 
+    #[allow(dead_code)]
     pub fn broadcast_raw(&self, message: &str) {
         let _ = self.tx.send(message.to_string());
     }

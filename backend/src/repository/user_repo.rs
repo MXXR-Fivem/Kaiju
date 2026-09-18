@@ -11,6 +11,7 @@ impl UserRepository {
         Self { pool }
     }
 
+    #[allow(dead_code)]
     pub async fn find_all(&self) -> Result<Vec<UserAccount>, AppError> {
         let users = sqlx::query_as::<_, UserAccount>(
             r#"
