@@ -57,7 +57,7 @@ impl TransferRepository {
         .await?;
 
         let created = self.find_by_id(id).await?.ok_or_else(|| {
-            AppError::InternalError("Transfert non retrouvé après insertion.".to_string())
+            AppError::InternalError("Transfert non retrouve apres insertion.".to_string())
         })?;
 
         Ok(created)

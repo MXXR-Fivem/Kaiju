@@ -13,25 +13,22 @@ import { Subscription } from 'rxjs';
   imports: [CommonModule],
   template: `
     <div class="relative w-full h-full bg-[#07090e] overflow-hidden select-none">
-      <!-- Conteneur Carte Leaflet -->
       <div #mapContainer class="w-full h-full z-0"></div>
 
-      <!-- Superposition : Banderole d'urgence active -->
       <div *ngIf="activeDisaster" 
            class="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-6 py-2 rounded-full border border-red-500 bg-red-950/90 backdrop-blur-md shadow-2xl flex items-center gap-3 animate-pulse">
-        <span class="inline-block w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
         <span class="font-mono font-bold tracking-wider text-red-300 text-sm">
           ALERTE CATASTROPHE : {{ activeDisaster.disaster_type }} DANS {{ getDistrictName(activeDisaster.district_id) }} (NIVEAU {{ activeDisaster.calculated_level }})
         </span>
         <span class="text-xs px-2 py-0.5 rounded bg-red-800 text-red-100 font-mono">
-          Intensité : {{ activeDisaster.intensity }}%
+          Intensite : {{ activeDisaster.intensity }}%
         </span>
       </div>
 
-      <!-- SÉLECTEUR DE CALQUES TACTIQUES ALIGNÉ VERTICALEMENT À DROITE PAR DESSUS LA CARTE -->
       <div class="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-2 p-2 rounded-xl bg-slate-950/90 border border-slate-800/80 backdrop-blur-md shadow-2xl">
         <div class="text-[9px] font-mono uppercase tracking-widest text-slate-400 text-center pb-1 border-b border-slate-800">
-          Calques
+          CALQUES
         </div>
 
         <button *ngFor="let layer of tacticalLayers"
@@ -40,10 +37,8 @@ import { Subscription } from 'rxjs';
                 [ngClass]="context.activeTacticalLayer() === layer.id 
                   ? 'bg-slate-900 border-sky-400 text-white shadow-lg shadow-sky-950/50' 
                   : 'bg-slate-950/60 border-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-900/80'">
-          <!-- Icône du calque -->
-          <span class="text-base">{{ layer.icon }}</span>
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 font-bold text-[10px]" [style.color]="layer.color">{{ layer.tag }}</span>
 
-          <!-- Libellé du calque -->
           <div class="text-left">
             <div class="font-bold text-[11px] leading-tight" 
                  [style.color]="context.activeTacticalLayer() === layer.id ? layer.color : ''">
@@ -54,19 +49,17 @@ import { Subscription } from 'rxjs';
             </div>
           </div>
 
-          <!-- Voyant actif -->
           <span *ngIf="context.activeTacticalLayer() === layer.id" 
                 class="w-1.5 h-1.5 rounded-full animate-ping ml-1"
                 [style.background-color]="layer.color"></span>
         </button>
       </div>
 
-      <!-- Panneau indicateur du Calque Actif en haut à gauche -->
       <div class="absolute top-4 left-4 z-20 px-4 py-2.5 rounded-lg bg-slate-950/90 border border-slate-800/80 backdrop-blur text-xs font-mono text-slate-200 shadow-xl space-y-1">
         <div class="flex items-center gap-2">
-          <span class="text-base">{{ getCurrentLayerConfig().icon }}</span>
+          <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] text-sky-400 font-bold">{{ getCurrentLayerConfig().tag }}</span>
           <span class="font-bold uppercase tracking-wider text-sky-400 text-[11px]">
-            Mode de Visualisation : {{ getCurrentLayerConfig().label }}
+            Mode : {{ getCurrentLayerConfig().label }}
           </span>
         </div>
         <div class="text-[10px] text-slate-400">
@@ -74,10 +67,9 @@ import { Subscription } from 'rxjs';
         </div>
       </div>
 
-      <!-- Mini-légende tactique en bas à gauche -->
       <div class="absolute bottom-6 left-6 z-10 p-3 rounded-lg bg-slate-900/90 border border-slate-800 backdrop-blur text-xs font-mono text-slate-300 shadow-xl space-y-1.5">
         <div class="font-semibold text-sky-400 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800 flex items-center justify-between">
-          <span>Réseau Opérationnel</span>
+          <span>Reseau Operationnel</span>
           <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{{ context.activeTacticalLayer() }}</span>
         </div>
         <div class="flex items-center gap-2">
@@ -90,11 +82,11 @@ import { Subscription } from 'rxjs';
         </div>
         <div *ngIf="context.activeTacticalLayer() === 'POWER'" class="flex items-center gap-2 text-amber-300 text-[10px]">
           <span class="w-3 h-1 bg-sky-400 rounded animate-pulse"></span>
-          <span>Câbles H.T. Actifs / Coupés en rouge clignotant</span>
+          <span>Lignes H.T. Actives / Coupees en rouge</span>
         </div>
         <div *ngIf="context.activeTacticalLayer() === 'WATER'" class="flex items-center gap-2 text-sky-300 text-[10px]">
           <span class="w-3 h-1 bg-blue-500 rounded"></span>
-          <span>Aqueducs de liaison & Stations côtières</span>
+          <span>Aqueducs de liaison & Stations cotieres</span>
         </div>
       </div>
     </div>
@@ -130,7 +122,6 @@ export class MapComponent implements OnInit, OnDestroy {
   activeDisaster: DisasterEvent | null = null;
 
   constructor() {
-    // Effet réactif Angular : Quand le calque tactique change, on redessine instantanément
     effect(() => {
       const layer = this.context.activeTacticalLayer();
       if (this.map && this.districts.length > 0) {
@@ -167,30 +158,30 @@ export class MapComponent implements OnInit, OnDestroy {
         const totalGen = this.getCityTotal('GENERATOR');
         const totalFuel = this.getCityTotal('FUEL');
         const inTransit = this.countTransfersInTransit(['GENERATOR', 'FUEL']);
-        return `Réseau H.T. : ${totalGen} générateurs | ${totalFuel.toLocaleString()} L carburant | ${inTransit} convois d'énergie`;
+        return `Reseau H.T. : ${totalGen} generateurs | ${totalFuel.toLocaleString()} L carburant | ${inTransit} convois energie`;
       }
       case 'WATER': {
         const totalWater = this.getCityTotal('WATER');
         const totalPurifiers = this.getCityTotal('WATER_PURIFIER');
         const inTransit = this.countTransfersInTransit(['WATER', 'WATER_PURIFIER']);
-        return `Réseau Eau : ${totalWater.toLocaleString()} L potable | ${totalPurifiers} purificateurs | ${inTransit} convois citernes`;
+        return `Reseau Eau : ${totalWater.toLocaleString()} L potable | ${totalPurifiers} purificateurs | ${inTransit} convois citernes`;
       }
       case 'FOOD': {
         const totalFood = this.getCityTotal('FOOD');
         const inTransit = this.countTransfersInTransit(['FOOD']);
-        return `Subsistance : ${totalFood.toLocaleString()} rations d'urgence | ${inTransit} convois alimentaires`;
+        return `Subsistance : ${totalFood.toLocaleString()} rations | ${inTransit} convois alimentaires`;
       }
       case 'MEDICAL': {
         const totalMed = this.getCityTotal('MED_KIT');
         const totalStaff = this.getCityTotal('MEDIC');
         const inTransit = this.countTransfersInTransit(['MED_KIT', 'MEDIC']);
-        return `Urgences : ${totalMed} kits chirurgicaux | ${totalStaff} brigades mobiles | ${inTransit} convois sanitaires`;
+        return `Urgences : ${totalMed} kits chirurgicaux | ${totalStaff} brigades | ${inTransit} convois sanitaires`;
       }
       case 'HEAVY_GEAR': {
         const shelters = this.getCityTotal('SHELTER');
         const atv = this.getCityTotal('ATV');
         const inTransit = this.countTransfersInTransit(['SHELTER', 'ATV', 'CLEARING_GEAR']);
-        return `Abris : ${shelters} modules | 4x4 : ${atv} véhicules | ${inTransit} convois lourds`;
+        return `Abris : ${shelters} modules | 4x4 : ${atv} vehicules | ${inTransit} convois lourds`;
       }
       default:
         return `Vue globale 5 secteurs de Tokyork | ${this.transfers.filter(t => t.status === 'IN_TRANSIT').length} convois logistiques actifs`;
@@ -243,7 +234,7 @@ export class MapComponent implements OnInit, OnDestroy {
           }
         });
       },
-      error: (err) => console.error('Erreur chargement quartiers :', err)
+      error: () => {}
     });
 
     this.api.getActiveDisaster().subscribe({
@@ -332,7 +323,6 @@ export class MapComponent implements OnInit, OnDestroy {
           polygon.setStyle(this.getDistrictStyle(d));
         }
 
-        // Marqueur dynamique selon le calque sélectionné
         const markerHtml = this.buildDistrictMarkerHtml(d, currentLayer);
         const customIcon = L.divIcon({
           className: 'kaiju-radar-marker',
@@ -353,9 +343,7 @@ export class MapComponent implements OnInit, OnDestroy {
         } else {
           marker.setIcon(customIcon);
         }
-      } catch (e) {
-        console.error('Erreur rendu quartier :', d.code, e);
-      }
+      } catch {}
     });
   }
 
@@ -371,8 +359,8 @@ export class MapComponent implements OnInit, OnDestroy {
         const isBlackout = d.current_disaster_level >= 3 && gen < 30;
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded text-[9px] font-mono border ${isBlackout ? 'bg-red-950/90 border-red-500 text-red-300 animate-pulse' : 'bg-amber-950/80 border-amber-600 text-amber-300'}">
-            ⚡ ${gen} Générateurs | ${fuel} L
-            <div class="text-[8px] opacity-80">${isBlackout ? '❌ BLACKOUT' : '⚡ 20kV ALIMENTÉ'}</div>
+            GEN: ${gen} | FUEL: ${fuel} L
+            <div class="text-[8px] opacity-80">${isBlackout ? '[COUPURE]' : '[20kV ACTIF]'}</div>
           </div>
         `;
         break;
@@ -382,8 +370,8 @@ export class MapComponent implements OnInit, OnDestroy {
         const purifiers = this.getDistrictStock(d.id, 'WATER_PURIFIER');
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded text-[9px] font-mono border bg-sky-950/80 border-sky-600 text-sky-300">
-            💧 ${water.toLocaleString()} L | 🚰 ${purifiers}
-            <div class="text-[8px] opacity-80">${d.is_coastal ? '🌊 Station Baie' : '⛰️ Réserve Enclavée'}</div>
+            H2O: ${water.toLocaleString()} L | PURIF: ${purifiers}
+            <div class="text-[8px] opacity-80">${d.is_coastal ? '[STATION BAIE]' : '[RESERVE ENCLAVEE]'}</div>
           </div>
         `;
         break;
@@ -392,7 +380,7 @@ export class MapComponent implements OnInit, OnDestroy {
         const food = this.getDistrictStock(d.id, 'FOOD');
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded text-[9px] font-mono border bg-amber-950/80 border-amber-600 text-amber-300">
-            🍞 ${food.toLocaleString()} Rations
+            FOOD: ${food.toLocaleString()} Rations
           </div>
         `;
         break;
@@ -402,7 +390,7 @@ export class MapComponent implements OnInit, OnDestroy {
         const staff = this.getDistrictStock(d.id, 'MEDIC');
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded text-[9px] font-mono border bg-red-950/80 border-red-600 text-red-300">
-            🏥 ${med} Kits | 🚑 ${staff} Secours
+            KITS: ${med} | SECOURS: ${staff}
           </div>
         `;
         break;
@@ -412,7 +400,7 @@ export class MapComponent implements OnInit, OnDestroy {
         const atv = this.getDistrictStock(d.id, 'ATV');
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded text-[9px] font-mono border bg-purple-950/80 border-purple-600 text-purple-300">
-            ⛺ ${shelter} Abris | 🚙 ${atv} 4x4
+            ABRIS: ${shelter} | 4x4: ${atv}
           </div>
         `;
         break;
@@ -420,7 +408,7 @@ export class MapComponent implements OnInit, OnDestroy {
       default:
         layerBadge = `
           <div class="px-1.5 py-0.5 rounded bg-slate-950/80 border border-slate-800 text-[9px] font-mono text-slate-300 whitespace-nowrap">
-            ${d.name.split(' ')[0]} ${d.is_coastal ? '🌊' : '⛰️'}
+            ${d.name.split(' ')[0]} ${d.is_coastal ? '[LITTORAL]' : '[ENCLAVE]'}
           </div>
         `;
     }
@@ -445,7 +433,6 @@ export class MapComponent implements OnInit, OnDestroy {
   private renderRoutes(): void {
     this.routeLayers.clearLayers();
 
-    // Routes terrestres
     const landRoutes: [string, string][] = [
       ['dist_apex', 'dist_xeno'],
       ['dist_warden', 'dist_xeno'],
@@ -466,7 +453,6 @@ export class MapComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Routes maritimes dans la baie (Echo, Xeno, Zion)
     const seaRoutes: [string, string][] = [
       ['dist_echo', 'dist_xeno'],
       ['dist_xeno', 'dist_zion'],
@@ -495,7 +481,6 @@ export class MapComponent implements OnInit, OnDestroy {
     const layer = this.context.activeTacticalLayer();
 
     if (layer === 'POWER') {
-      // VISUALISATION DU RÉSEAU ÉLECTRIQUE SOUTERRAIN
       const powerLines: [string, string][] = [
         ['dist_apex', 'dist_xeno'],
         ['dist_warden', 'dist_xeno'],
@@ -507,7 +492,6 @@ export class MapComponent implements OnInit, OnDestroy {
         const d1 = this.districts.find((x) => x.id === fromId);
         const d2 = this.districts.find((x) => x.id === toId);
         if (d1 && d2) {
-          // Si l'un des quartiers est en crise majeure (niveau >= 3), câble rompu / défaillant
           const isSevered = d1.current_disaster_level >= 3 || d2.current_disaster_level >= 3;
 
           const cable = L.polyline([[d1.latitude, d1.longitude], [d2.latitude, d2.longitude]], {
@@ -517,14 +501,13 @@ export class MapComponent implements OnInit, OnDestroy {
             className: isSevered ? 'electric-cable-off' : 'electric-cable-on'
           });
 
-          // Label sur le milieu du câble
           const midLat = (d1.latitude + d2.latitude) / 2;
           const midLng = (d1.longitude + d2.longitude) / 2;
           const labelIcon = L.divIcon({
             className: '',
             html: `
               <div class="px-1.5 py-0.5 rounded text-[8px] font-mono border whitespace-nowrap shadow-lg ${isSevered ? 'bg-red-950 border-red-600 text-red-300 animate-pulse' : 'bg-sky-950/90 border-sky-500 text-sky-200'}">
-                ${isSevered ? '⚡ RUPTURE CÂBLE' : '⚡ 20kV ACTIF'}
+                ${isSevered ? '[RUPTURE RESEAU]' : '[20kV ACTIF]'}
               </div>
             `,
             iconSize: [80, 20],
@@ -536,7 +519,6 @@ export class MapComponent implements OnInit, OnDestroy {
         }
       });
     } else if (layer === 'WATER') {
-      // VISUALISATION DES AQUEDUCS & CONDUITES HYDRAULIQUES
       const waterLines: [string, string][] = [
         ['dist_echo', 'dist_xeno'],
         ['dist_xeno', 'dist_apex'],
@@ -561,7 +543,7 @@ export class MapComponent implements OnInit, OnDestroy {
             className: '',
             html: `
               <div class="px-1.5 py-0.5 rounded text-[8px] font-mono border bg-sky-950/90 border-sky-600 text-sky-200 whitespace-nowrap shadow">
-                💧 CONDUITE D'EAU POTABLE
+                [CONDUITE EAU POTABLE]
               </div>
             `,
             iconSize: [100, 20],
@@ -580,7 +562,6 @@ export class MapComponent implements OnInit, OnDestroy {
     const currentLayer = this.context.activeTacticalLayer();
     const config = this.getCurrentLayerConfig();
 
-    // Filtrer les convois en cours qui correspondent à ce calque
     const relevantTransfers = this.transfers.filter((t) => {
       if (t.status !== 'IN_TRANSIT') return false;
       if (currentLayer === 'GLOBAL') return true;
@@ -591,7 +572,6 @@ export class MapComponent implements OnInit, OnDestroy {
       const d1 = this.districts.find((x) => x.id === t.source_district_id);
       const d2 = this.districts.find((x) => x.id === t.target_district_id);
       if (d1 && d2) {
-        // Position du convoi (au milieu du trajet ou légèrement décalée)
         const isSea = t.route_type === 'SEA';
         const midLat = (d1.latitude + d2.latitude) / 2 + (isSea ? 0.015 : 0.003);
         const midLng = (d1.longitude + d2.longitude) / 2 + (isSea ? 0.015 : -0.003);
@@ -600,7 +580,7 @@ export class MapComponent implements OnInit, OnDestroy {
           className: '',
           html: `
             <div class="convoi-marker border ${isSea ? 'border-sky-400' : 'border-amber-400'} animate-bounce">
-              <span class="text-xs">${isSea ? '🚢' : '🚚'}</span>
+              <span class="text-[9px] font-bold text-sky-300">[${t.route_type}]</span>
               <span class="font-bold text-white">${t.quantity} ${t.unit}</span>
               <span class="text-slate-300">(${t.resource_name})</span>
               <span class="text-[9px] px-1 rounded bg-slate-800 text-sky-300">${t.estimated_duration_minutes}m</span>
@@ -610,7 +590,6 @@ export class MapComponent implements OnInit, OnDestroy {
           iconAnchor: [70, 14]
         });
 
-        // Ligne de guidage brillante pour le convoi
         L.polyline([[d1.latitude, d1.longitude], [d2.latitude, d2.longitude]], {
           color: isSea ? '#38bdf8' : '#f59e0b',
           weight: 3,

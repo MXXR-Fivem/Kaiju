@@ -10,7 +10,7 @@ export interface TacticalLayerConfig {
   id: TacticalLayer;
   label: string;
   sublabel: string;
-  icon: string;
+  tag: string;
   color: string;
   resourceCodes: string[];
 }
@@ -19,16 +19,16 @@ export const TACTICAL_LAYERS: TacticalLayerConfig[] = [
   {
     id: 'GLOBAL',
     label: 'Global QG',
-    sublabel: 'Vue d\'ensemble tactique',
-    icon: '🌐',
+    sublabel: 'Vue tactique',
+    tag: 'ALL',
     color: '#38bdf8',
     resourceCodes: []
   },
   {
     id: 'POWER',
-    label: 'Électricité & Énergie',
-    sublabel: 'Câbles H.T. & Générateurs',
-    icon: '⚡',
+    label: 'Electricite & Energie',
+    sublabel: 'Cables H.T. & Generateurs',
+    tag: 'PWR',
     color: '#fbbf24',
     resourceCodes: ['GENERATOR', 'FUEL']
   },
@@ -36,31 +36,31 @@ export const TACTICAL_LAYERS: TacticalLayerConfig[] = [
     id: 'WATER',
     label: 'Eau & Filtration',
     sublabel: 'Aqueducs & Stations',
-    icon: '💧',
+    tag: 'H2O',
     color: '#0284c7',
     resourceCodes: ['WATER', 'WATER_PURIFIER']
   },
   {
     id: 'FOOD',
     label: 'Vivres & Rations',
-    sublabel: 'Chaîne de subsistance',
-    icon: '🍞',
+    sublabel: 'Chaine de subsistance',
+    tag: 'SUB',
     color: '#f97316',
     resourceCodes: ['FOOD']
   },
   {
     id: 'MEDICAL',
-    label: 'Médical & Soins',
+    label: 'Medical & Soins',
     sublabel: 'Kits & Brigades mobiles',
-    icon: '🏥',
+    tag: 'MED',
     color: '#ef4444',
     resourceCodes: ['MED_KIT', 'MEDIC']
   },
   {
     id: 'HEAVY_GEAR',
     label: 'Abris & Logistique',
-    sublabel: 'Tentes, 4x4 & Déblaiement',
-    icon: '🚜',
+    sublabel: 'Tentes, Tout-Terrain & Deblaiement',
+    tag: 'LOG',
     color: '#a855f7',
     resourceCodes: ['SHELTER', 'ATV', 'CLEARING_GEAR']
   }

@@ -5,9 +5,9 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum UserRole {
-    QC, // Quarter Coordinator
-    LC, // Logistics Coordinator
-    CD, // City Director
+    QC,
+    LC,
+    CD,
 }
 
 impl std::str::FromStr for UserRole {
@@ -18,7 +18,7 @@ impl std::str::FromStr for UserRole {
             "QC" => Ok(UserRole::QC),
             "LC" => Ok(UserRole::LC),
             "CD" => Ok(UserRole::CD),
-            _ => Err(format!("Rôle non reconnu : {}", s)),
+            _ => Err(format!("Role non reconnu : {}", s)),
         }
     }
 }

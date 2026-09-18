@@ -13,27 +13,23 @@ import { District, ResourceType, DistrictResourceDetail } from '../../models/kai
     <div *ngIf="context.isTransferModalOpen()" 
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none">
       <div class="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden font-mono text-xs text-slate-200">
-        <!-- Entête Modale -->
         <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-sky-400 text-sm">🚚</span>
+            <span class="text-sky-400 font-bold">[LOG]</span>
             <h3 class="font-bold text-sm text-white">Ordre de Transfert Logistique Inter-Quartiers</h3>
           </div>
-          <button (click)="context.isTransferModalOpen.set(false)" class="text-slate-400 hover:text-white text-base">✕</button>
+          <button (click)="context.isTransferModalOpen.set(false)" class="text-slate-400 hover:text-white text-base">X</button>
         </div>
 
-        <!-- Corps du formulaire -->
         <form (ngSubmit)="submitTransfer()" class="p-5 space-y-4">
-          <!-- Alerte Erreur de Violation de Règle Métier -->
           <div *ngIf="errorMessage" class="p-3 rounded bg-red-950/80 border border-red-600 text-red-200 space-y-1">
             <div class="font-bold flex items-center gap-1.5">
-              <span>⚠️</span>
-              <span>Refus Moteur de Règles [Code: {{ errorCode }}]</span>
+              <span>[REFUS]</span>
+              <span>Refus Moteur de Regles [Code: {{ errorCode }}]</span>
             </div>
             <p class="text-[11px] leading-relaxed">{{ errorMessage }}</p>
           </div>
 
-          <!-- Sélection Source & Destination -->
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-slate-400 mb-1">Quartier Source :</label>
@@ -56,9 +52,8 @@ import { District, ResourceType, DistrictResourceDetail } from '../../models/kai
             </div>
           </div>
 
-          <!-- Choix de la Ressource -->
           <div>
-            <label class="block text-slate-400 mb-1">Ressource Stratégique :</label>
+            <label class="block text-slate-400 mb-1">Ressource Strategique :</label>
             <select [(ngModel)]="selectedResource" name="resource" (change)="onResourceChange()"
                     class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white focus:outline-none focus:border-sky-500">
               <option *ngFor="let r of resourceTypes" [value]="r.code">
@@ -67,22 +62,20 @@ import { District, ResourceType, DistrictResourceDetail } from '../../models/kai
             </select>
           </div>
 
-          <!-- Affichage du seuil de rétention du quartier source -->
           <div *ngIf="selectedStock" class="p-2.5 rounded bg-slate-950 border border-slate-800 space-y-1 text-[11px]">
             <div class="flex justify-between text-slate-300">
               <span>Stock Actuel : <strong>{{ selectedStock.current_quantity }} {{ selectedStock.unit }}</strong></span>
-              <span>Seuil Légal ({{ selectedStock.min_retention_pct * 100 }}%) : <strong class="text-amber-400">{{ selectedStock.min_retained_quantity }}</strong></span>
+              <span>Seuil Legal ({{ selectedStock.min_retention_pct * 100 }}%) : <strong class="text-amber-400">{{ selectedStock.min_retained_quantity }}</strong></span>
             </div>
             <div class="flex justify-between text-sky-400">
-              <span>Quantité Transférable Maximale :</span>
+              <span>Quantite Transferable Maximale :</span>
               <strong class="text-emerald-400 text-xs">{{ selectedStock.transferable_quantity }} {{ selectedStock.unit }}</strong>
             </div>
           </div>
 
-          <!-- Quantité & Voie de Transport -->
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-slate-400 mb-1">Quantité Demandée :</label>
+              <label class="block text-slate-400 mb-1">Quantite Demandee :</label>
               <input type="number" [(ngModel)]="quantity" name="qty" min="1" required
                      class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-bold focus:outline-none focus:border-sky-500" />
             </div>
@@ -97,7 +90,6 @@ import { District, ResourceType, DistrictResourceDetail } from '../../models/kai
             </div>
           </div>
 
-          <!-- Boutons d'action -->
           <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
             <button type="button" (click)="context.isTransferModalOpen.set(false)"
                     class="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">

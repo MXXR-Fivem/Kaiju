@@ -10,12 +10,10 @@ export class KaijuWsService {
   private reconnectTimeout: any = null;
   private isDestroyed = false;
 
-  // Signaux réactifs pour l'interface
   readonly isConnected = signal<boolean>(false);
   readonly alerts = signal<TacticalAlert[]>([]);
   readonly latestDisaster = signal<any>(null);
 
-  // Flux d'événements pour les composants
   readonly messages$ = new Subject<WsMessage>();
   readonly resourceUpdates$ = new Subject<any>();
   readonly resourceConflicts$ = new Subject<any>();
@@ -36,7 +34,6 @@ export class KaijuWsService {
       this.socket = new WebSocket(wsUrl);
 
       this.socket.onopen = () => {
-        console.log('[KAIJU WS] Connecté au réseau de Tokyork');
         this.isConnected.set(true);
       };
 
@@ -44,9 +41,7 @@ export class KaijuWsService {
         try {
           const data = JSON.parse(event.data);
           this.handleIncomingMessage(data);
-        } catch (e) {
-          console.error('[KAIJU WS] Erreur décodage JSON message :', e);
-        }
+        } catch (e) {}
       };
 
       this.socket.onclose = () => {
@@ -56,11 +51,10 @@ export class KaijuWsService {
         }
       };
 
-      this.socket.onerror = (err) => {
-        console.warn('[KAIJU WS] Erreur socket :', err);
+      this.socket.onerror = () => {
         this.socket?.close();
       };
-    } catch (err) {
+    } catch {
       this.scheduleReconnect();
     }
   }
@@ -77,7 +71,6 @@ export class KaijuWsService {
   private scheduleReconnect(): void {
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     this.reconnectTimeout = setTimeout(() => {
-      console.log('[KAIJU WS] Tentative de reconnexion...');
       this.connect();
     }, 3000);
   }
@@ -128,7 +121,7 @@ export class KaijuWsService {
   }
 
   addAlert(alert: TacticalAlert): void {
-    this.alerts.update((current) => [alert, ...current.slice(0, 19)]); // Garde les 20 plus récentes
+    this.alerts.update((current) => [alert, ...current.slice(0, 19)]);
   }
 
   dismissAlert(id: string): void {

@@ -53,7 +53,6 @@ impl DisasterRepository {
     ) -> Result<DisasterEvent, AppError> {
         let mut tx = self.pool.begin().await?;
 
-        // Clôturer toute catastrophe antérieure active (une catastrophe à la fois)
         sqlx::query(
             r#"
             UPDATE disaster_events
@@ -64,7 +63,6 @@ impl DisasterRepository {
         .execute(&mut *tx)
         .await?;
 
-        // Insérer la nouvelle catastrophe
         sqlx::query(
             r#"
             INSERT INTO disaster_events (id, district_id, disaster_type, intensity, calculated_level, is_active, triggered_by)
@@ -80,7 +78,6 @@ impl DisasterRepository {
         .execute(&mut *tx)
         .await?;
 
-        // Mettre à jour le niveau de sinistre du quartier
         sqlx::query(
             r#"
             UPDATE districts
@@ -96,7 +93,7 @@ impl DisasterRepository {
         tx.commit().await?;
 
         let created = self.find_active().await?.ok_or_else(|| {
-            AppError::InternalError("Impossible de relire le désastre créé.".to_string())
+            AppError::InternalError("Impossible de relire le desastre cree.".to_string())
         })?;
 
         Ok(created)
@@ -118,7 +115,6 @@ impl DisasterRepository {
             .execute(&mut *tx)
             .await?;
 
-            // Rétablir le quartier au niveau 1
             sqlx::query(
                 r#"
                 UPDATE districts

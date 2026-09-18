@@ -44,7 +44,6 @@ impl ResourceService {
         self.resource_repo.find_district_resources_detailed(district_id.as_deref()).await
     }
 
-    /// Création d'une réservation intra-quartier (autorisée à partir du Niveau de Crise 2)
     pub async fn create_reservation(
         &self,
         district_id_or_code: &str,
@@ -54,7 +53,7 @@ impl ResourceService {
         quantity: i64,
     ) -> Result<String, AppError> {
         if quantity <= 0 {
-            return Err(AppError::BadRequest("La quantité à réserver doit être supérieure à 0.".to_string()));
+            return Err(AppError::BadRequest("La quantite a reserver doit etre superieure a 0.".to_string()));
         }
 
         let district = if let Some(d) = self.district_repo.find_by_code(district_id_or_code).await? {
@@ -65,12 +64,11 @@ impl ResourceService {
             return Err(AppError::NotFound(format!("Quartier '{}' introuvable.", district_id_or_code)));
         };
 
-        // Règle de niveau : Réservations débloquées dès le niveau 2
         if district.current_disaster_level < 2 {
             return Err(AppError::DisasterLevelRestricted {
                 required_level: 2,
                 current_level: district.current_disaster_level,
-                message: "Les réservations d'urgence intra-quartier ne sont autorisées qu'à partir du Niveau 2 d'alerte.".to_string(),
+                message: "Les reservations d'urgence intra-quartier ne sont autorisees qu'a partir du Niveau 2 d'alerte.".to_string(),
             });
         }
 
@@ -78,18 +76,16 @@ impl ResourceService {
             .ok_or_else(|| AppError::NotFound(format!("Ressource '{}' introuvable.", resource_code)))?;
 
         let current_stock = self.resource_repo.find_district_resource(&district.id, &res_type.id).await?
-            .ok_or_else(|| AppError::NotFound("Stock non alloué pour ce quartier.".to_string()))?;
+            .ok_or_else(|| AppError::NotFound("Stock non alloue pour ce quartier.".to_string()))?;
 
         let available = current_stock.current_quantity - current_stock.reserved_quantity;
 
-        // Détection de conflit : si la demande dépasse le stock disponible restant
         if quantity > available {
-            // Notification immédiate du conflit par WebSocket
             self.ws_hub.broadcast_event(WsEvent::ResourceConflict {
                 district_code: district.code.clone(),
                 resource_code: resource_code.to_string(),
                 message: format!(
-                    "CONFLIT DE RESSOURCE dans {} : L'unité '{}' tente de réserver {} {} alors qu'il n'en reste que {}.",
+                    "CONFLIT DE RESSOURCE dans {} : L'unite '{}' tente de reserver {} {} alors qu'il n'en reste que {}.",
                     district.code, team_name, quantity, res_type.unit, available
                 ),
                 contenders: vec![team_name.to_string()],
@@ -99,7 +95,7 @@ impl ResourceService {
                 resource_code: resource_code.to_string(),
                 district_code: district.code.clone(),
                 message: format!(
-                    "Stock disponible insuffisant : {} disponibles contre {} requis par l'équipe '{}'.",
+                    "Stock disponible insuffisant : {} disponibles contre {} requis par l'equipe '{}'.",
                     available, quantity, team_name
                 ),
             });
@@ -115,7 +111,6 @@ impl ResourceService {
             quantity,
         ).await?;
 
-        // Broadcast de la mise à jour des stocks
         self.ws_hub.broadcast_event(WsEvent::ResourceUpdated {
             district_id: district.id.clone(),
             resource_id: res_type.id.clone(),

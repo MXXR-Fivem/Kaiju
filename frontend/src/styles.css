@@ -4,7 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Styles tactiques globaux KAIJU */
 :root {
   --crisis-accent: #38bdf8;
   --crisis-glow: rgba(56, 189, 248, 0.2);
@@ -21,7 +20,6 @@ html, body {
   user-select: none;
 }
 
-/* Custom Scrollbars pour terminaux de crise */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -37,7 +35,6 @@ html, body {
   background: #334155;
 }
 
-/* Personnalisation de Leaflet pour le mode nocturne / radar */
 .leaflet-container {
   background: #07090e !important;
   font-family: inherit;
@@ -65,7 +62,6 @@ html, body {
   }
 }
 
-/* Animations des Câbles Électriques & Conduites */
 @keyframes electric-flow {
   0% {
     stroke-dashoffset: 40;
@@ -104,7 +100,6 @@ html, body {
   filter: drop-shadow(0 0 4px #0284c7);
 }
 
-/* Marqueur de Convoi Logistique en Transit */
 .convoi-marker {
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid #38bdf8;

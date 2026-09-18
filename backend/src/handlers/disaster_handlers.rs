@@ -7,16 +7,16 @@ use crate::service::CrisisService;
 #[derive(Deserialize)]
 pub struct GodModeTriggerRequest {
     pub secret_password: String,
-    pub district_target: String, // Code ou ID (A, E, W, X, Z)
-    pub disaster_type: String,   // EARTHQUAKE, TSUNAMI, TORNADO
-    pub intensity: i64,          // 1 à 100
+    pub district_target: String,
+    pub disaster_type: String,
+    pub intensity: i64,
 }
 
 #[derive(Deserialize)]
 pub struct RetentionOverrideRequest {
     pub secret_password: String,
     pub district_target: String,
-    pub user_role: String,       // Doit être "CD"
+    pub user_role: String,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +102,6 @@ pub async fn god_mode_retention_override(
         "status": "OVERRIDDEN",
         "district": req.district_target,
         "new_min_retention_pct": new_pct,
-        "message": "Seuil de rétention abaissé à 15% par prérogative du City Director."
+        "message": "Seuil de retention abaisse a 15% par prerogative du City Director."
     })))
 }

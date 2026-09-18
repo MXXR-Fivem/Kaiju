@@ -25,18 +25,14 @@ import { CrisisContextService } from '../services/crisis-context.service';
   template: `
     <div class="relative w-screen h-screen flex overflow-hidden select-none"
          [ngClass]="context.crisisThemeClass()">
-      <!-- Navbar Latérale Gauche (Officiers, Statut, Navigation) -->
       <app-navbar-left></app-navbar-left>
 
-      <!-- Vue Centrale : Carte Leaflet 2D Plein Écran -->
       <main class="flex-1 h-full relative overflow-hidden">
         <app-map></app-map>
       </main>
 
-      <!-- Navbar Latérale Droite (Flux, Convois, Actions, Alertes) -->
       <app-navbar-right></app-navbar-right>
 
-      <!-- Modales Superposées de Gestion de Crise -->
       <app-transfer-modal></app-transfer-modal>
       <app-reservation-modal></app-reservation-modal>
       <app-inventory-modal></app-inventory-modal>

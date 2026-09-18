@@ -18,14 +18,12 @@ export class KaijuApiService {
   private baseUrl = this.resolveBaseUrl();
 
   private resolveBaseUrl(): string {
-    // Si on est en dev sans reverse-proxy sur 4200, on peut pointer vers localhost:8080
     if (typeof window !== 'undefined' && window.location.port === '4200') {
       return 'http://localhost:8080/api';
     }
     return '/api';
   }
 
-  // Quartiers & Adjacences
   getDistricts(): Observable<District[]> {
     return this.http.get<District[]>(`${this.baseUrl}/districts`);
   }
@@ -38,7 +36,6 @@ export class KaijuApiService {
     return this.http.get<DistrictAdjacency[]>(`${this.baseUrl}/districts/${codeOrId}/adjacencies`);
   }
 
-  // Ressources & Réservations
   getResourceTypes(): Observable<ResourceType[]> {
     return this.http.get<ResourceType[]>(`${this.baseUrl}/resources/types`);
   }
@@ -70,7 +67,6 @@ export class KaijuApiService {
     );
   }
 
-  // Transferts
   getTransfers(): Observable<TransferRequestDetail[]> {
     return this.http.get<TransferRequestDetail[]>(`${this.baseUrl}/transfers`);
   }
@@ -97,7 +93,6 @@ export class KaijuApiService {
     return this.http.post<any>(`${this.baseUrl}/transfers/${id}/deliver`, {});
   }
 
-  // Catastrophes & Mode Crise
   getActiveDisaster(): Observable<{ active_disaster: DisasterEvent | null }> {
     return this.http.get<{ active_disaster: DisasterEvent | null }>(`${this.baseUrl}/disaster/active`);
   }
@@ -106,7 +101,6 @@ export class KaijuApiService {
     return this.http.post<{ status: string; disaster: DisasterEvent | null }>(`${this.baseUrl}/disaster/resolve`, {});
   }
 
-  // God Mode Admin
   verifyGodMode(secret_password: string): Observable<{ authenticated: boolean; role: string }> {
     return this.http.post<{ authenticated: boolean; role: string }>(`${this.baseUrl}/god-mode/verify`, {
       secret_password

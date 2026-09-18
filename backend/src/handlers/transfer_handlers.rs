@@ -12,7 +12,7 @@ pub struct CreateTransferRequestDto {
     pub resource_code: String,
     pub quantity: i64,
     #[serde(default = "default_route")]
-    pub route_type: String, // "LAND" ou "SEA"
+    pub route_type: String,
 }
 
 fn default_route() -> String {

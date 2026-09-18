@@ -5,7 +5,7 @@ export interface TacticalUser {
   id: string;
   name: string;
   role: UserRole;
-  districtCode?: string; // Quartier assigné pour QC
+  districtCode?: string;
 }
 
 export const PRESET_OPERATORS: TacticalUser[] = [
@@ -22,33 +22,28 @@ export const PRESET_OPERATORS: TacticalUser[] = [
   providedIn: 'root'
 })
 export class CrisisContextService {
-  readonly currentUser = signal<TacticalUser>(PRESET_OPERATORS[0]); // Par défaut CD
+  readonly currentUser = signal<TacticalUser>(PRESET_OPERATORS[0]);
   readonly activeDisasterLevel = signal<number>(1);
   readonly selectedDistrictCode = signal<string | null>(null);
-
-  // Calque tactique actif de visualisation sur la carte (Global, Power, Water, Food, Medical, Heavy Gear)
   readonly activeTacticalLayer = signal<TacticalLayer>('GLOBAL');
 
-  // Modales d'action
   readonly isTransferModalOpen = signal<boolean>(false);
   readonly isReserveModalOpen = signal<boolean>(false);
   readonly isInventoryModalOpen = signal<boolean>(false);
   readonly isCalendarModalOpen = signal<boolean>(false);
 
-  // Rôles et autorisations calculées
   readonly isCD = computed(() => this.currentUser().role === 'CD');
   readonly isLC = computed(() => this.currentUser().role === 'LC');
   readonly isQC = computed(() => this.currentUser().role === 'QC');
 
-  // Thème adaptatif selon le niveau de crise
   readonly crisisThemeClass = computed(() => {
     const lvl = this.activeDisasterLevel();
     switch (lvl) {
-      case 5: return 'theme-disaster-5'; // Rouge critique
-      case 4: return 'theme-disaster-4'; // Orange sévère
-      case 3: return 'theme-disaster-3'; // Jaune alerte
-      case 2: return 'theme-disaster-2'; // Bleu vigilance
-      default: return 'theme-disaster-1'; // Vert nominal
+      case 5: return 'theme-disaster-5';
+      case 4: return 'theme-disaster-4';
+      case 3: return 'theme-disaster-3';
+      case 2: return 'theme-disaster-2';
+      default: return 'theme-disaster-1';
     }
   });
 

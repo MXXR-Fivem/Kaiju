@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("Violation de la règle de rétention : {message}")]
+    #[error("Violation de la regle de retention : {message}")]
     RetentionViolation {
         message: String,
         current_quantity: i64,
@@ -35,29 +35,29 @@ pub enum AppError {
         message: String,
     },
 
-    #[error("Permissions insuffisantes pour cette opération de crise : {message}")]
+    #[error("Permissions insuffisantes pour cette operation de crise : {message}")]
     InsufficientPermissions {
         required_role: String,
         current_role: String,
         message: String,
     },
 
-    #[error("Niveau de crise insuffisant pour débloquer cette action : {message}")]
+    #[error("Niveau de crise insuffisant pour debloquer cette action : {message}")]
     DisasterLevelRestricted {
         required_level: i64,
         current_level: i64,
         message: String,
     },
 
-    #[error("Transit bloqué par le carrefour central Xeno : {message}")]
+    #[error("Transit bloque par le carrefour central Xeno : {message}")]
     TransitDeniedByXeno {
         message: String,
     },
 
-    #[error("Accès God Mode refusé : mot de passe invalide")]
+    #[error("Acces God Mode refuse : mot de passe invalide")]
     UnauthorizedGodMode,
 
-    #[error("Élément introuvable : {0}")]
+    #[error("Element introuvable : {0}")]
     NotFound(String),
 
     #[error("Erreur de validation : {0}")]
@@ -66,7 +66,7 @@ pub enum AppError {
     #[error("Erreur interne de persistance : {0}")]
     DatabaseError(#[from] sqlx::Error),
 
-    #[error("Erreur interne du système : {0}")]
+    #[error("Erreur interne du systeme : {0}")]
     InternalError(String),
 }
 
@@ -81,18 +81,18 @@ pub struct ErrorResponse {
 impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
-            AppError::RetentionViolation { .. } => StatusCode::UNPROCESSABLE_ENTITY, // 422
-            AppError::InvalidDisasterTarget { .. } => StatusCode::UNPROCESSABLE_ENTITY, // 422
-            AppError::NonAdjacentTransfer { .. } => StatusCode::BAD_REQUEST, // 400
-            AppError::ResourceConflict { .. } => StatusCode::CONFLICT, // 409
-            AppError::InsufficientPermissions { .. } => StatusCode::FORBIDDEN, // 403
-            AppError::DisasterLevelRestricted { .. } => StatusCode::FORBIDDEN, // 403
-            AppError::TransitDeniedByXeno { .. } => StatusCode::CONFLICT, // 409
-            AppError::UnauthorizedGodMode => StatusCode::UNAUTHORIZED, // 401
-            AppError::NotFound(_) => StatusCode::NOT_FOUND, // 404
-            AppError::BadRequest(_) => StatusCode::BAD_REQUEST, // 400
-            AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR, // 500
-            AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR, // 500
+            AppError::RetentionViolation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::InvalidDisasterTarget { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            AppError::NonAdjacentTransfer { .. } => StatusCode::BAD_REQUEST,
+            AppError::ResourceConflict { .. } => StatusCode::CONFLICT,
+            AppError::InsufficientPermissions { .. } => StatusCode::FORBIDDEN,
+            AppError::DisasterLevelRestricted { .. } => StatusCode::FORBIDDEN,
+            AppError::TransitDeniedByXeno { .. } => StatusCode::CONFLICT,
+            AppError::UnauthorizedGodMode => StatusCode::UNAUTHORIZED,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
+            AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -112,7 +112,7 @@ impl ResponseError for AppError {
                 Some(serde_json::json!({
                     "district_code": district_code,
                     "disaster_type": disaster_type,
-                    "reason": "Les quartiers enclavés Apex et Warden ne possèdent pas de littoral pour un Tsunami."
+                    "reason": "Les quartiers enclaves Apex et Warden ne possedent pas de littoral pour un Tsunami."
                 })),
             ),
             AppError::NonAdjacentTransfer { source_code, target_code, transit_required_via, .. } => (

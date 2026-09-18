@@ -157,7 +157,6 @@ impl ResourceRepository {
         team_name: &str,
         quantity: i64,
     ) -> Result<(), AppError> {
-        // En transaction : vérifie et augmente reserved_quantity
         let mut tx = self.pool.begin().await?;
 
         sqlx::query(
