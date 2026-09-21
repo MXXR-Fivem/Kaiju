@@ -1,6 +1,5 @@
 import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { CrisisContextService, PRESET_OPERATORS } from '../../services/crisis-context.service';
 import { KaijuWsService } from '../../services/kaiju-ws.service';
 import { HudWindowService } from '../../services/hud-window.service';
@@ -8,9 +7,9 @@ import { HudWindowService } from '../../services/hud-window.service';
 @Component({
   selector: 'app-hud-topbar',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule],
   template: `
-    <header class="fixed top-0 left-0 right-0 h-10 bg-black/95 border-b border-zinc-800 z-50 px-3 flex items-center justify-between text-xs font-mono select-none">
+    <header class="fixed top-0 left-0 right-0 h-12 bg-black/95 border-b border-zinc-800 z-50 px-3 flex items-center justify-between text-xs font-mono select-none">
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-1.5">
           <span class="w-2 h-2 bg-green-500 animate-pulse"></span>
@@ -86,12 +85,6 @@ import { HudWindowService } from '../../services/hud-window.service';
             [{{ op.role }}] {{ op.name }} {{ op.districtCode ? '(' + op.districtCode + ')' : '(QG)' }}
           </option>
         </select>
-
-        <a routerLink="/god-mode-secret"
-           title="Acces direct maitre de crise"
-           class="px-2 py-0.5 border border-red-900 bg-red-950/40 hover:bg-red-600 hover:text-black text-red-400 text-[10px] tracking-wider uppercase transition-colors font-bold">
-          [PROT-OMEGA]
-        </a>
       </div>
     </header>
   `

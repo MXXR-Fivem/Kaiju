@@ -28,7 +28,7 @@ import { CrisisContextService } from '../services/crisis-context.service';
     <div class="relative w-screen h-screen overflow-hidden bg-black font-mono select-none">
       <app-hud-topbar></app-hud-topbar>
 
-      <main class="fixed inset-0 w-full h-full z-0 pt-10">
+      <main class="fixed inset-0 w-full h-full z-0 pt-12">
         <app-map></app-map>
       </main>
 

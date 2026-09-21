@@ -8,10 +8,21 @@ RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
+# Pre-fetch the Tokyork basemap tiles (z11-16) at build time so the running
+# container has no runtime dependency on server.arcgisonline.com.
+FROM alpine:3.20 AS tiles
+
+RUN apk add --no-cache curl
+
+WORKDIR /tiles-build
+COPY tiles-build/tile-list.txt tiles-build/fetch-tiles.sh ./
+RUN chmod +x fetch-tiles.sh && ./fetch-tiles.sh /tiles tile-list.txt 48
+
 FROM nginx:alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
+COPY --from=tiles /tiles /usr/share/nginx/html/tiles
 
 EXPOSE 80
 

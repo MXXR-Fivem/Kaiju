@@ -1,13 +1,12 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { KaijuApiService } from '../../services/kaiju-api.service';
 
 @Component({
   selector: 'app-god-mode',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="w-full h-screen bg-black text-zinc-200 font-mono flex flex-col select-none overflow-hidden">
       <header class="px-5 py-3 bg-black border-b border-zinc-800 border-t-4 border-t-red-600 flex items-center justify-between shadow-2xl">
@@ -29,9 +28,6 @@ import { KaijuApiService } from '../../services/kaiju-api.service';
           <span *ngIf="isAuthenticated" class="px-2 py-0.5 border border-red-600 bg-red-950 text-red-300 text-[10px] font-bold tracking-widest uppercase animate-pulse">
             [SUPER-ADMIN ACTIF]
           </span>
-          <a routerLink="/" class="px-3 py-1 border border-zinc-700 bg-black hover:bg-zinc-800 text-zinc-300 text-xs tracking-wider uppercase transition-colors">
-            &larr; RETOUR AU QG TACTIQUE
-          </a>
         </div>
       </header>
 

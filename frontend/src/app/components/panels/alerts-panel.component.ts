@@ -12,7 +12,7 @@ import { TacticalAlert } from '../../models/kaiju.models';
       <div class="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800">
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 bg-amber-500 animate-pulse"></span>
-          <span class="text-zinc-400 text-[10px] uppercase tracking-wider">FLUX TEMPS REEL // WEBSOCKET</span>
+          <span class="text-zinc-400 text-[10px] uppercase tracking-wider">FLUX TEMPS REEL</span>
         </div>
         <button *ngIf="ws.alerts().length > 0"
                 (click)="clearAlerts()"
