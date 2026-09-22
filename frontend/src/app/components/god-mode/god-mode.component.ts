@@ -1,7 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { KaijuApiService } from '../../services/kaiju-api.service';
+import { EARTHQUAKE_FRAMES } from './ascii/earthquake.ascii';
+import { TSUNAMI_FRAMES } from './ascii/tsunami.ascii';
+import { TORNADO_FRAMES } from './ascii/tornado.ascii';
 
 @Component({
   selector: 'app-god-mode',
@@ -59,7 +62,24 @@ import { KaijuApiService } from '../../services/kaiju-api.service';
         </div>
       </div>
 
-      <div *ngIf="isAuthenticated" class="flex-1 overflow-y-auto p-5 grid grid-cols-2 gap-5 bg-black">
+      <div *ngIf="isAuthenticated" class="flex-1 overflow-y-auto bg-black">
+
+        <div class="px-5 pt-5">
+          <label class="block text-zinc-400 text-[10px] uppercase tracking-wider mb-2">SCAN TACTIQUE DES FLEAUX :</label>
+          <div class="grid grid-cols-3 gap-4">
+            <button *ngFor="let a of asciiPanels" type="button"
+                 (click)="disasterType = a.type"
+                 class="p-3 border transition-colors text-left"
+                 [ngClass]="disasterType === a.type ? a.activeClass : 'bg-black border-zinc-800 hover:border-zinc-700'">
+              <pre class="text-[11px] leading-[12px] font-mono text-center overflow-hidden"
+                   [ngClass]="disasterType === a.type ? a.textClass : 'text-zinc-700'">{{ a.frames[frameIndex % a.frames.length] }}</pre>
+              <div class="text-center text-xs font-bold uppercase tracking-widest mt-2"
+                   [ngClass]="disasterType === a.type ? a.textClass : 'text-zinc-600'">{{ a.label }}</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="p-5 grid grid-cols-2 gap-5">
         <div class="space-y-4 bg-black p-4 border border-zinc-800 border-t-2 border-t-amber-500">
           <div class="flex items-center justify-between border-b border-zinc-900 pb-2">
             <div class="flex items-center gap-2">
@@ -168,11 +188,12 @@ import { KaijuApiService } from '../../services/kaiju-api.service';
             </div>
           </div>
         </div>
+        </div>
       </div>
     </div>
   `
 })
-export class GodModeComponent {
+export class GodModeComponent implements OnInit, OnDestroy {
   api = inject(KaijuApiService);
 
   isAuthenticated = false;
@@ -193,7 +214,46 @@ export class GodModeComponent {
   disasterType = 'EARTHQUAKE';
   intensity = 75;
 
+  asciiPanels = [
+    {
+      type: 'EARTHQUAKE',
+      label: 'SEISME',
+      frames: EARTHQUAKE_FRAMES,
+      activeClass: 'bg-red-950/40 border-red-500',
+      textClass: 'text-red-400'
+    },
+    {
+      type: 'TSUNAMI',
+      label: 'TSUNAMI',
+      frames: TSUNAMI_FRAMES,
+      activeClass: 'bg-sky-950/40 border-sky-500',
+      textClass: 'text-sky-400'
+    },
+    {
+      type: 'TORNADO',
+      label: 'TORNADE',
+      frames: TORNADO_FRAMES,
+      activeClass: 'bg-amber-950/40 border-amber-500',
+      textClass: 'text-amber-400'
+    }
+  ];
+
+  frameIndex = 0;
+  private frameTimer?: ReturnType<typeof setInterval>;
+
   logs: Array<{ action: string; status: number; message: string; raw?: any }> = [];
+
+  ngOnInit(): void {
+    this.frameTimer = setInterval(() => {
+      this.frameIndex = (this.frameIndex + 1) % 4;
+    }, 450);
+  }
+
+  ngOnDestroy(): void {
+    if (this.frameTimer) {
+      clearInterval(this.frameTimer);
+    }
+  }
 
   loginGodMode(): void {
     this.isAuthenticating = true;
