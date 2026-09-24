@@ -1,10 +1,9 @@
-import { Component, ElementRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, NgZone, OnInit, OnDestroy, ViewChild, effect, inject, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
 import { KaijuApiService } from '../../services/kaiju-api.service';
 import { KaijuWsService } from '../../services/kaiju-ws.service';
 import { CrisisContextService } from '../../services/crisis-context.service';
-import { HudWindowService } from '../../services/hud-window.service';
 import { District, DisasterEvent, TacticalLayer, TACTICAL_LAYERS, DistrictResourceDetail, TransferRequestDetail } from '../../models/kaiju.models';
 import { Subscription } from 'rxjs';
 
@@ -24,6 +23,19 @@ const DISTRICT_COLORS: Record<string, string> = {
   Z: '#38bdf8'
 };
 
+const DEFAULT_CENTER: L.LatLngTuple = [35.6720, 139.7450];
+const DEFAULT_ZOOM = 14;
+const FOCUS_MAX_ZOOM = 15;
+const MIN_ZOOM_FLOOR = 10.75;
+const FOCUS_ZOOM_OUT_FACTOR = 1.5;
+const MAX_BOUNDS = L.latLngBounds([35.35, 139.40], [35.95, 140.15]);
+const KEY_PAN_SPEED = 12;
+const KEY_PAN_BOOST = 2.5;
+const KEY_ZOOM_STEP = 1;
+const PAN_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD']);
+
+type LatLngRing = [number, number][];
+
 @Component({
   selector: 'app-map',
   standalone: true,
@@ -33,7 +45,7 @@ const DISTRICT_COLORS: Record<string, string> = {
       <div #mapContainer class="w-full h-full z-0"></div>
 
       <div *ngIf="activeDisaster"
-           class="fixed top-14 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 bg-black/95 border border-red-600 border-t-2 border-t-red-500 text-red-400 font-mono text-xs flex items-center gap-3 shadow-2xl animate-pulse">
+           class="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100%-8rem)] px-4 py-1.5 bg-black/95 border border-red-600 border-t-2 border-t-red-500 text-red-400 font-mono text-xs flex items-center gap-3 shadow-2xl animate-pulse">
         <span class="w-2 h-2 bg-red-500 animate-ping"></span>
         <span class="font-bold tracking-widest uppercase">
           ALERTE CATASTROPHE : {{ activeDisaster.disaster_type }} // {{ getDistrictName(activeDisaster.district_id) }} [NIVEAU {{ activeDisaster.calculated_level }}]
@@ -43,7 +55,7 @@ const DISTRICT_COLORS: Record<string, string> = {
         </span>
       </div>
 
-      <div class="fixed right-3 top-16 z-40 flex flex-col gap-1.5 p-1 bg-black/90 border border-zinc-800 select-none">
+      <div class="absolute right-3 top-3 z-40 flex flex-col gap-1.5 p-1 bg-black/90 border border-zinc-800 select-none">
         <div class="text-[8px] uppercase tracking-widest text-zinc-500 text-center pb-0.5 border-b border-zinc-800">
           CALQ
         </div>
@@ -81,27 +93,54 @@ const DISTRICT_COLORS: Record<string, string> = {
         </button>
       </div>
 
-      <div class="fixed bottom-3 left-3 z-30 px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] text-zinc-400 flex items-center gap-2">
-        <span class="text-green-500 font-bold">[CALQUE: {{ getCurrentLayerConfig().tag }}]</span>
-        <span class="uppercase tracking-wider text-zinc-300">{{ getCurrentLayerConfig().label }}</span>
-        <span class="text-zinc-600">//</span>
-        <span>{{ getLayerLiveMetrics() }}</span>
+      <div class="absolute bottom-3 left-3 z-30 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-15rem)] px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] text-zinc-400 flex items-center gap-2">
+        <span class="shrink-0 text-green-500 font-bold">[CALQUE: {{ getCurrentLayerConfig().tag }}]</span>
+        <span class="shrink-0 uppercase tracking-wider text-zinc-300">{{ getCurrentLayerConfig().label }}</span>
+        <span class="shrink-0 text-zinc-600">//</span>
+        <span class="min-w-0 truncate">{{ getLayerLiveMetrics() }}</span>
+      </div>
+
+      <div class="hidden sm:flex absolute bottom-3 right-3 z-30 flex-col gap-0.5 px-2.5 py-1.5 bg-black/80 border border-zinc-800 text-[9px] uppercase tracking-widest text-zinc-500 pointer-events-none">
+        <div><span class="text-zinc-300 font-bold">[GLISSER]</span> DEPLACER</div>
+        <div><span class="text-zinc-300 font-bold">[ZQSD / FLECHES]</span> PANORAMIQUE</div>
+        <div><span class="text-zinc-300 font-bold">[MAJ]</span> RAPIDE</div>
+        <div><span class="text-zinc-300 font-bold">[MOLETTE / + -]</span> ZOOM</div>
+        <div><span class="text-zinc-300 font-bold">[ESPACE]</span> RECENTRER</div>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    :host ::ng-deep .leaflet-container.leaflet-grab {
+      cursor: grab;
+    }
+    :host ::ng-deep .leaflet-container.map-grabbing,
+    :host ::ng-deep .leaflet-container.map-grabbing * {
+      cursor: grabbing !important;
+    }
+  `]
 })
 export class MapComponent implements OnInit, OnDestroy {
   @ViewChild('mapContainer', { static: true }) mapContainer!: ElementRef;
 
   context = inject(CrisisContextService);
-  hud = inject(HudWindowService);
   private api = inject(KaijuApiService);
   private ws = inject(KaijuWsService);
+  private zone = inject(NgZone);
+  private host = inject(ElementRef);
 
   tacticalLayers = TACTICAL_LAYERS;
   private map!: L.Map;
   private districtLayers = new Map<string, L.Polygon>();
   private markerLayers = new Map<string, L.Marker>();
+  private districtShapes = new Map<string, LatLngRing[]>();
+  private districtAnchors = new Map<string, L.LatLng>();
+
+  private pressedKeys = new Set<string>();
+  private boostHeld = false;
+  private keyPanRAF: number | null = null;
+  private keyPanLastTime = 0;
+  private keyPanRemainder = { x: 0, y: 0 };
+  private resizeObserver: ResizeObserver | null = null;
 
   private routeLayers = L.layerGroup();
   private infrastructureLayers = L.layerGroup();
@@ -117,8 +156,29 @@ export class MapComponent implements OnInit, OnDestroy {
 
   private subs = new Subscription();
 
+  private focusInitialized = false;
+  private lastFocusedCode: string | null = null;
+  private pendingFocus = false;
+
+  private highlightRenderer = L.svg({ padding: 0.5 });
+  private selectedGlowLayer: L.Polygon | null = null;
+  private selectedLineLayer: L.Polygon | null = null;
+  private hoverLayer: L.Polygon | null = null;
+  private hoveredCode: string | null = null;
+  private renderedSelectionCode: string | null = null;
+  private hoverRAF: number | null = null;
+  private lastPointer: L.Point | null = null;
+
+  constructor() {
+    effect(() => {
+      const code = this.context.selectedDistrictCode();
+      untracked(() => this.onSelectionChange(code));
+    });
+  }
+
   ngOnInit(): void {
     this.initMap();
+    this.initNavigation();
     this.loadData();
     this.listenToEvents();
   }
@@ -128,6 +188,7 @@ export class MapComponent implements OnInit, OnDestroy {
     if (this.convoyAnimationRAF !== null) {
       cancelAnimationFrame(this.convoyAnimationRAF);
     }
+    this.teardownNavigation();
     if (this.map) {
       this.map.remove();
     }
@@ -198,38 +259,470 @@ export class MapComponent implements OnInit, OnDestroy {
 
   private initMap(): void {
     this.map = L.map(this.mapContainer.nativeElement, {
-      center: [35.6720, 139.7450],
-      zoom: 14,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
       minZoom: 11.75,
-      maxZoom: 25,
+      maxZoom: 18,
       zoomSnap: 0.25,
-      zoomDelta: 0.25,
-      wheelPxPerZoomLevel: 120,
-      maxBounds: [
-        [35.35, 139.40],
-        [35.95, 140.15]
-      ],
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 20,
+      wheelDebounceTime: 20,
+      maxBounds: MAX_BOUNDS,
       maxBoundsViscosity: 1.0,
+      dragging: true,
+      inertia: true,
+      inertiaDeceleration: 6000,
+      inertiaMaxSpeed: 800,
+      easeLinearity: 0.35,
+      keyboard: false,
       zoomControl: false,
       attributionControl: false,
       renderer: L.canvas({ padding: 1 }),
       preferCanvas: true,
     });
 
-    // Self-hosted Tokyork basemap tiles (z11-16, baked into the image at build
-    // time from server.arcgisonline.com — see frontend/tiles-build). No
-    // runtime dependency on an external tile server. minZoom is kept above
-    // the tile bake floor so the AOI always fills the viewport — dropping
-    // below it exposes empty space past the tile coverage.
     L.tileLayer('/tiles/{z}/{x}/{y}.jpg', {
-      maxZoom: 25,
+      maxZoom: 18,
       maxNativeZoom: 16,
-      minZoom: 11.75,
+      minNativeZoom: 11,
+      minZoom: 10,
     }).addTo(this.map);
+
+    this.updateMinZoom();
 
     this.routeLayers.addTo(this.map);
     this.infrastructureLayers.addTo(this.map);
     this.convoyLayers.addTo(this.map);
+  }
+
+  private initNavigation(): void {
+    this.map.on('click', this.onMapClick);
+    this.map.on('dragstart', this.onDragStart);
+    this.map.on('dragend', this.onDragEnd);
+
+    this.zone.runOutsideAngular(() => {
+      const container: HTMLElement = this.mapContainer.nativeElement;
+      container.addEventListener('mousedown', this.onContainerMouseDown);
+      container.addEventListener('mousemove', this.onContainerMouseMove);
+      container.addEventListener('mouseleave', this.onContainerMouseLeave);
+      window.addEventListener('mouseup', this.onWindowMouseUp);
+      window.addEventListener('keydown', this.onKeyDown);
+      window.addEventListener('keyup', this.onKeyUp);
+      window.addEventListener('blur', this.onWindowBlur);
+
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => {
+          if (this.map) {
+            this.map.invalidateSize({ animate: false });
+            this.updateMinZoom();
+          }
+        });
+        this.resizeObserver.observe(container);
+      }
+    });
+  }
+
+  private teardownNavigation(): void {
+    const container: HTMLElement = this.mapContainer.nativeElement;
+    container.removeEventListener('mousedown', this.onContainerMouseDown);
+    container.removeEventListener('mousemove', this.onContainerMouseMove);
+    container.removeEventListener('mouseleave', this.onContainerMouseLeave);
+    if (this.hoverRAF !== null) {
+      cancelAnimationFrame(this.hoverRAF);
+      this.hoverRAF = null;
+    }
+    window.removeEventListener('mouseup', this.onWindowMouseUp);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onWindowBlur);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    this.stopKeyPan();
+    if (this.map) {
+      this.map.off('click', this.onMapClick);
+      this.map.off('dragstart', this.onDragStart);
+      this.map.off('dragend', this.onDragEnd);
+    }
+  }
+
+  private onMapClick = (e: L.LeafletMouseEvent): void => {
+    const point = e.originalEvent ? this.map.mouseEventToContainerPoint(e.originalEvent) : e.containerPoint;
+    const code = this.findDistrictAt(point);
+    if (code) {
+      this.context.selectDistrict(code);
+    }
+  };
+
+  private onContainerMouseMove = (e: MouseEvent): void => {
+    if (!this.map) return;
+    this.lastPointer = this.map.mouseEventToContainerPoint(e);
+    if (this.hoverRAF !== null) return;
+    this.hoverRAF = requestAnimationFrame(() => {
+      this.hoverRAF = null;
+      if (!this.lastPointer) return;
+      this.setHovered(this.findDistrictAt(this.lastPointer));
+    });
+  };
+
+  private onContainerMouseLeave = (): void => {
+    this.lastPointer = null;
+    this.setHovered(null);
+  };
+
+  private setHovered(code: string | null): void {
+    if (code === this.hoveredCode) return;
+    this.hoveredCode = code;
+    this.renderHover();
+  }
+
+  private renderHover(): void {
+    if (this.hoverLayer) {
+      this.hoverLayer.remove();
+      this.hoverLayer = null;
+    }
+    const code = this.hoveredCode;
+    if (!code || code === this.context.selectedDistrictCode()) return;
+    const rings = this.districtShapes.get(code);
+    if (!rings || rings.length === 0) return;
+    const color = DISTRICT_COLORS[code] || '#22c55e';
+    this.hoverLayer = L.polygon(rings, {
+      renderer: this.highlightRenderer,
+      interactive: false,
+      className: 'kaiju-sector-hover',
+      color,
+      weight: 3,
+      lineCap: 'square',
+      lineJoin: 'miter',
+      fill: true,
+      fillColor: color,
+      fillOpacity: 0.12,
+    }).addTo(this.map);
+  }
+
+  private renderSelection(): void {
+    if (!this.map) return;
+    const code = this.context.selectedDistrictCode();
+    const rings = code ? this.districtShapes.get(code) : undefined;
+    const drawable = !!rings && rings.length > 0;
+    if (drawable && code === this.renderedSelectionCode && this.selectedLineLayer) return;
+
+    this.selectedGlowLayer?.remove();
+    this.selectedLineLayer?.remove();
+    this.selectedGlowLayer = null;
+    this.selectedLineLayer = null;
+    this.renderedSelectionCode = null;
+    if (!drawable) {
+      this.renderHover();
+      return;
+    }
+    this.renderedSelectionCode = code;
+
+    this.selectedGlowLayer = L.polygon(rings, {
+      renderer: this.highlightRenderer,
+      interactive: false,
+      className: 'kaiju-sector-selected-glow',
+      color: '#22d3ee',
+      weight: 10,
+      opacity: 0.4,
+      lineJoin: 'miter',
+      fill: false,
+    }).addTo(this.map);
+
+    this.selectedLineLayer = L.polygon(rings, {
+      renderer: this.highlightRenderer,
+      interactive: false,
+      className: 'kaiju-sector-selected',
+      color: '#ecfeff',
+      weight: 3,
+      lineCap: 'square',
+      lineJoin: 'miter',
+      fill: true,
+      fillColor: '#22d3ee',
+      fillOpacity: 0.08,
+    }).addTo(this.map);
+
+    this.renderHover();
+  }
+
+  private onDragStart = (): void => {
+    this.setGrabbing(true);
+  };
+
+  private onDragEnd = (): void => {
+    this.setGrabbing(false);
+  };
+
+  private onContainerMouseDown = (e: MouseEvent): void => {
+    if (e.button !== 0 || e.shiftKey) return;
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body && typeof active.blur === 'function') {
+      active.blur();
+    }
+    this.setGrabbing(true);
+  };
+
+  private onWindowMouseUp = (): void => {
+    this.setGrabbing(false);
+  };
+
+  private setGrabbing(active: boolean): void {
+    const container: HTMLElement | undefined = this.mapContainer?.nativeElement;
+    if (!container) return;
+    container.classList.toggle('map-grabbing', active);
+  }
+
+  private onKeyDown = (e: KeyboardEvent): void => {
+    if (!this.map) return;
+    this.boostHeld = e.shiftKey;
+    if (e.metaKey) {
+      this.pressedKeys.clear();
+      this.stopKeyPan();
+      return;
+    }
+    if (e.ctrlKey || e.altKey) return;
+    if (this.isEditableTarget(e.target)) return;
+
+    if (PAN_KEYS.has(e.code)) {
+      e.preventDefault();
+      this.pressedKeys.add(e.code);
+      this.startKeyPan();
+      return;
+    }
+
+    if (e.key === '+' || e.key === '=' || e.code === 'NumpadAdd') {
+      e.preventDefault();
+      this.map.zoomIn(KEY_ZOOM_STEP);
+      return;
+    }
+
+    if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') {
+      e.preventDefault();
+      this.map.zoomOut(KEY_ZOOM_STEP);
+      return;
+    }
+
+    if (e.code === 'Space' || e.key === 'Home') {
+      if (this.isForeignControl(e.target)) return;
+      e.preventDefault();
+      if (!e.repeat) {
+        this.recenter();
+      }
+    }
+  };
+
+  private onKeyUp = (e: KeyboardEvent): void => {
+    this.boostHeld = e.shiftKey;
+    if (this.pressedKeys.delete(e.code) && this.pressedKeys.size === 0) {
+      this.stopKeyPan();
+    }
+  };
+
+  private onWindowBlur = (): void => {
+    this.pressedKeys.clear();
+    this.boostHeld = false;
+    this.stopKeyPan();
+    this.setGrabbing(false);
+  };
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+  }
+
+  private isForeignControl(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const control = target.closest('button, a, [role="button"], summary');
+    return !!control && !this.host.nativeElement.contains(control);
+  }
+
+  private updateMinZoom(): void {
+    const size = this.map.getSize();
+    if (size.x === 0 || size.y === 0) return;
+    const zoom = this.map.getZoom();
+    const nw = this.map.project(MAX_BOUNDS.getNorthWest(), zoom);
+    const se = this.map.project(MAX_BOUNDS.getSouthEast(), zoom);
+    const scale = Math.max(size.x / (se.x - nw.x), size.y / (se.y - nw.y));
+    const coverZoom = zoom + Math.log2(scale);
+    const snapped = Math.ceil(coverZoom * 4) / 4;
+    this.map.setMinZoom(Math.max(MIN_ZOOM_FLOOR, snapped));
+  }
+
+  private recenter(): void {
+    this.map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 0.6 });
+  }
+
+  private onSelectionChange(code: string | null): void {
+    this.renderSelection();
+    if (!this.focusInitialized) {
+      this.focusInitialized = true;
+      this.lastFocusedCode = code;
+      if (code === null) return;
+    } else if (code === this.lastFocusedCode) {
+      return;
+    }
+    this.lastFocusedCode = code;
+    this.focusSelection();
+  }
+
+  private focusSelection(): void {
+    if (!this.map || this.districtShapes.size === 0) {
+      this.pendingFocus = true;
+      return;
+    }
+    this.pendingFocus = false;
+
+    const code = this.lastFocusedCode;
+    const rings = code === null
+      ? Array.from(this.districtShapes.values()).flat()
+      : this.districtShapes.get(code) ?? [];
+    const points = rings.flat();
+    if (points.length === 0) return;
+
+    const bounds = L.latLngBounds(points);
+    const fitZoom = Math.min(this.map.getBoundsZoom(bounds, false, L.point(80, 80)), FOCUS_MAX_ZOOM);
+    const targetZoom = Math.max(this.map.getMinZoom(), fitZoom - Math.log2(FOCUS_ZOOM_OUT_FACTOR));
+
+    this.map.stop();
+    this.map.flyTo(bounds.getCenter(), targetZoom, { duration: 0.8 });
+  }
+
+  private startKeyPan(): void {
+    if (this.keyPanRAF !== null) return;
+    this.keyPanLastTime = 0;
+    this.keyPanRemainder = { x: 0, y: 0 };
+    this.keyPanRAF = requestAnimationFrame(this.keyPanStep);
+  }
+
+  private stopKeyPan(): void {
+    if (this.keyPanRAF !== null) {
+      cancelAnimationFrame(this.keyPanRAF);
+      this.keyPanRAF = null;
+    }
+  }
+
+  private keyPanStep = (now: number): void => {
+    if (!this.map || this.pressedKeys.size === 0) {
+      this.keyPanRAF = null;
+      return;
+    }
+
+    const elapsed = this.keyPanLastTime ? Math.min(now - this.keyPanLastTime, 50) : 1000 / 60;
+    this.keyPanLastTime = now;
+
+    let dirX = 0;
+    let dirY = 0;
+    if (this.pressedKeys.has('ArrowLeft') || this.pressedKeys.has('KeyA')) dirX -= 1;
+    if (this.pressedKeys.has('ArrowRight') || this.pressedKeys.has('KeyD')) dirX += 1;
+    if (this.pressedKeys.has('ArrowUp') || this.pressedKeys.has('KeyW')) dirY -= 1;
+    if (this.pressedKeys.has('ArrowDown') || this.pressedKeys.has('KeyS')) dirY += 1;
+
+    if (dirX !== 0 || dirY !== 0) {
+      const length = Math.hypot(dirX, dirY);
+      const speed = KEY_PAN_SPEED * (this.boostHeld ? KEY_PAN_BOOST : 1) * (elapsed / (1000 / 60));
+      this.keyPanRemainder.x += (dirX / length) * speed;
+      this.keyPanRemainder.y += (dirY / length) * speed;
+      const stepX = Math.round(this.keyPanRemainder.x);
+      const stepY = Math.round(this.keyPanRemainder.y);
+      this.keyPanRemainder.x -= stepX;
+      this.keyPanRemainder.y -= stepY;
+      if (stepX !== 0 || stepY !== 0) {
+        this.panWithinBounds(stepX, stepY);
+      }
+    }
+
+    this.keyPanRAF = requestAnimationFrame(this.keyPanStep);
+  };
+
+  private panWithinBounds(dx: number, dy: number): void {
+    const zoom = this.map.getZoom();
+    const half = this.map.getSize().divideBy(2);
+    const center = this.map.project(this.map.getCenter(), zoom);
+    const nw = this.map.project(MAX_BOUNDS.getNorthWest(), zoom);
+    const se = this.map.project(MAX_BOUNDS.getSouthEast(), zoom);
+    const targetX = this.clampAxis(center.x + dx, nw.x + half.x, se.x - half.x);
+    const targetY = this.clampAxis(center.y + dy, nw.y + half.y, se.y - half.y);
+    const offset = L.point(targetX - center.x, targetY - center.y).round();
+    if (offset.x === 0 && offset.y === 0) return;
+    this.map.panBy(offset, { animate: false });
+  }
+
+  private clampAxis(value: number, min: number, max: number): number {
+    if (min > max) return (min + max) / 2;
+    return Math.min(Math.max(value, min), max);
+  }
+
+  private findDistrictAt(point: L.Point): string | null {
+    const containerRect = (this.mapContainer.nativeElement as HTMLElement).getBoundingClientRect();
+    const clientX = containerRect.left + point.x;
+    const clientY = containerRect.top + point.y;
+    let markerHit: string | null = null;
+    let markerHitDistance = Infinity;
+    for (const d of this.districts) {
+      const el = this.markerLayers.get(d.id)?.getElement();
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) continue;
+      const dx = clientX - (rect.left + rect.width / 2);
+      const dy = clientY - (rect.top + rect.height / 2);
+      const distance = dx * dx + dy * dy;
+      if (distance < markerHitDistance) {
+        markerHitDistance = distance;
+        markerHit = d.code;
+      }
+    }
+    if (markerHit !== null) return markerHit;
+
+    const latlng = this.map.containerPointToLatLng(point);
+    const hits: string[] = [];
+    for (const [code, rings] of this.districtShapes) {
+      if (this.ringsContain(rings, latlng.lat, latlng.lng)) {
+        hits.push(code);
+      }
+    }
+    if (hits.length === 0) return null;
+    if (hits.length === 1) return hits[0];
+
+    let nearest = hits[0];
+    let nearestDistance = Infinity;
+    for (const code of hits) {
+      const anchor = this.districtAnchors.get(code);
+      if (!anchor) continue;
+      const p = this.map.latLngToContainerPoint(anchor);
+      const distance = (point.x - p.x) ** 2 + (point.y - p.y) ** 2;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = code;
+      }
+    }
+    return nearest;
+  }
+
+  private ringsContain(rings: LatLngRing[], lat: number, lng: number): boolean {
+    let inside = false;
+    for (const ring of rings) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [latI, lngI] = ring[i];
+        const [latJ, lngJ] = ring[j];
+        if ((latI > lat) !== (latJ > lat) && lng < ((lngJ - lngI) * (lat - latI)) / (latJ - latI) + lngI) {
+          inside = !inside;
+        }
+      }
+    }
+    return inside;
+  }
+
+  private toRings(bounds: unknown): LatLngRing[] {
+    if (!Array.isArray(bounds) || bounds.length === 0) return [];
+    const isPair = (v: unknown): v is [number, number] =>
+      Array.isArray(v) && v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number';
+    if (isPair(bounds[0])) {
+      return [bounds.filter(isPair).map((p) => [p[0], p[1]] as [number, number])];
+    }
+    return bounds.flatMap((ring) => this.toRings(ring));
   }
 
   private loadData(): void {
@@ -339,13 +832,12 @@ export class MapComponent implements OnInit, OnDestroy {
 
       if (bounds.length === 0) return;
 
+      this.districtShapes.set(d.code, this.toRings(bounds));
+      this.districtAnchors.set(d.code, L.latLng(d.latitude, d.longitude));
+
       let polygon = this.districtLayers.get(d.id);
       if (!polygon) {
-        polygon = L.polygon(bounds, this.getDistrictStyle(d));
-        polygon.on('click', () => {
-          this.context.selectDistrict(d.code);
-          this.hud.open('inventory');
-        });
+        polygon = L.polygon(bounds, { ...this.getDistrictStyle(d), interactive: false });
         polygon.addTo(this.map);
         this.districtLayers.set(d.id, polygon);
       } else {
@@ -363,11 +855,7 @@ export class MapComponent implements OnInit, OnDestroy {
 
       let marker = this.markerLayers.get(d.id);
       if (!marker) {
-        marker = L.marker([d.latitude, d.longitude], { icon: customIcon });
-        marker.on('click', () => {
-          this.context.selectDistrict(d.code);
-          this.hud.open('inventory');
-        });
+        marker = L.marker([d.latitude, d.longitude], { icon: customIcon, interactive: false, keyboard: false });
         marker.addTo(this.map);
         this.markerLayers.set(d.id, marker);
       } else {
@@ -375,6 +863,12 @@ export class MapComponent implements OnInit, OnDestroy {
         marker.setIcon(customIcon);
       }
     });
+
+    this.renderSelection();
+
+    if (this.pendingFocus) {
+      this.focusSelection();
+    }
   }
 
   private buildDistrictMarkerHtml(d: District): string {
