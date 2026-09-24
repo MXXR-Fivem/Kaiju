@@ -17,88 +17,111 @@ export interface WindowState {
   accentColor: 'green' | 'amber' | 'red';
 }
 
-const DEFAULT_WINDOWS: Record<string, WindowState> = {
-  inventory: {
-    id: 'inventory',
-    title: 'STOCKS & RESSOURCES // DISPONIBILITES PAR QUARTIER',
-    isOpen: false,
-    isMinimized: false,
-    x: 460,
-    y: 55,
-    width: 540,
-    height: 520,
-    defaultX: 460,
-    defaultY: 55,
-    defaultW: 540,
-    defaultH: 520,
-    zIndex: 30,
-    accentColor: 'green'
+interface WindowBlueprint {
+  id: string;
+  title: string;
+  offsetX: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+  accentColor: 'green' | 'amber' | 'red';
+}
+
+const STORAGE_KEY = 'kaiju_hud_windows_v2';
+const LEGACY_STORAGE_KEYS = ['kaiju_hud_windows_v1'];
+const BO_SIDEBAR_RATIO = 0.4;
+const BO_SIDEBAR_MIN_WIDTH = 360;
+const VIEWPORT_MARGIN = 12;
+const MIN_WINDOW_WIDTH = 300;
+const MIN_WINDOW_HEIGHT = 180;
+
+const WINDOW_BLUEPRINTS: WindowBlueprint[] = [
+  {
+    id: 'alerts',
+    title: 'RADAR // FLUX D\'ALERTES TACTIQUES',
+    offsetX: 16,
+    y: 60,
+    width: 420,
+    height: 380,
+    zIndex: 34,
+    accentColor: 'amber'
   },
-  transfers: {
+  {
     id: 'transfers',
     title: 'LOGISTIQUE // CONVOIS & DEMANDES DE TRANSFERT',
-    isOpen: false,
-    isMinimized: false,
-    x: 480,
+    offsetX: 40,
     y: 80,
     width: 520,
     height: 500,
-    defaultX: 480,
-    defaultY: 80,
-    defaultW: 520,
-    defaultH: 500,
     zIndex: 31,
     accentColor: 'green'
   },
-  reservations: {
+  {
     id: 'reservations',
     title: 'ALLOCATION // RESERVATION LOCALE D\'URGENCE',
-    isOpen: false,
-    isMinimized: false,
-    x: 360,
+    offsetX: 70,
     y: 110,
     width: 480,
     height: 460,
-    defaultX: 360,
-    defaultY: 110,
-    defaultW: 480,
-    defaultH: 460,
     zIndex: 32,
     accentColor: 'green'
   },
-  calendar: {
+  {
     id: 'calendar',
     title: 'PLANIFICATION // CALENDRIER OPERATIONNEL DE CRISE',
-    isOpen: false,
-    isMinimized: false,
-    x: 280,
+    offsetX: 100,
     y: 70,
     width: 600,
     height: 520,
-    defaultX: 280,
-    defaultY: 70,
-    defaultW: 600,
-    defaultH: 520,
     zIndex: 33,
     accentColor: 'green'
-  },
-  alerts: {
-    id: 'alerts',
-    title: 'RADAR // FLUX D\'ALERTES TACTIQUES',
-    isOpen: false,
-    isMinimized: false,
-    x: 20,
-    y: 55,
-    width: 420,
-    height: 380,
-    defaultX: 20,
-    defaultY: 55,
-    defaultW: 420,
-    defaultH: 380,
-    zIndex: 34,
-    accentColor: 'amber'
   }
-};
+];
+
+function viewportSize(): { width: number; height: number } {
+  if (typeof window === 'undefined') {
+    return { width: 1440, height: 900 };
+  }
+  return { width: window.innerWidth || 1440, height: window.innerHeight || 900 };
+}
+
+function mapAreaLeft(viewportWidth: number): number {
+  return Math.max(BO_SIDEBAR_MIN_WIDTH, Math.round(viewportWidth * BO_SIDEBAR_RATIO));
+}
+
+function buildDefaultWindows(): Record<string, WindowState> {
+  const viewport = viewportSize();
+  const left = mapAreaLeft(viewport.width);
+  const mapWidth = Math.max(0, viewport.width - left - VIEWPORT_MARGIN);
+  const result: Record<string, WindowState> = {};
+
+  for (const bp of WINDOW_BLUEPRINTS) {
+    const width = Math.max(MIN_WINDOW_WIDTH, Math.min(bp.width, mapWidth - VIEWPORT_MARGIN));
+    const maxX = viewport.width - width - VIEWPORT_MARGIN;
+    const x = Math.max(0, Math.min(left + bp.offsetX, maxX));
+    const height = Math.max(MIN_WINDOW_HEIGHT, Math.min(bp.height, viewport.height - bp.y - VIEWPORT_MARGIN));
+
+    result[bp.id] = {
+      id: bp.id,
+      title: bp.title,
+      isOpen: false,
+      isMinimized: false,
+      x,
+      y: bp.y,
+      width,
+      height,
+      defaultX: x,
+      defaultY: bp.y,
+      defaultW: width,
+      defaultH: height,
+      zIndex: bp.zIndex,
+      accentColor: bp.accentColor
+    };
+  }
+
+  return result;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -108,14 +131,14 @@ export class HudWindowService {
   readonly windows = signal<Record<string, WindowState>>(this.loadInitialState());
 
   private loadInitialState(): Record<string, WindowState> {
-    const clone: Record<string, WindowState> = {};
-    for (const key of Object.keys(DEFAULT_WINDOWS)) {
-      clone[key] = { ...DEFAULT_WINDOWS[key] };
-    }
+    const clone = buildDefaultWindows();
 
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const saved = window.localStorage.getItem('kaiju_hud_windows_v1');
+        for (const legacyKey of LEGACY_STORAGE_KEYS) {
+          window.localStorage.removeItem(legacyKey);
+        }
+        const saved = window.localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
           for (const key of Object.keys(parsed)) {
@@ -148,7 +171,7 @@ export class HudWindowService {
             isOpen: state[key].isOpen
           };
         }
-        window.localStorage.setItem('kaiju_hud_windows_v1', JSON.stringify(toSave));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
       } catch {}
     }
   }
@@ -244,11 +267,17 @@ export class HudWindowService {
 
   resetLayout(): void {
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem('kaiju_hud_windows_v1');
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        for (const legacyKey of LEGACY_STORAGE_KEYS) {
+          window.localStorage.removeItem(legacyKey);
+        }
+      } catch {}
     }
+    const defaults = buildDefaultWindows();
     const resetMap: Record<string, WindowState> = {};
-    for (const key of Object.keys(DEFAULT_WINDOWS)) {
-      const def = DEFAULT_WINDOWS[key];
+    for (const key of Object.keys(defaults)) {
+      const def = defaults[key];
       resetMap[key] = {
         ...def,
         x: def.defaultX,

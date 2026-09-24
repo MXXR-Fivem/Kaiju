@@ -31,6 +31,7 @@ export class CrisisContextService {
   readonly isReserveModalOpen = signal<boolean>(false);
   readonly isInventoryModalOpen = signal<boolean>(false);
   readonly isCalendarModalOpen = signal<boolean>(false);
+  readonly sidebarCollapsed = signal<boolean>(false);
 
   readonly isCD = computed(() => this.currentUser().role === 'CD');
   readonly isLC = computed(() => this.currentUser().role === 'LC');
@@ -64,5 +65,13 @@ export class CrisisContextService {
 
   setTacticalLayer(layer: TacticalLayer): void {
     this.activeTacticalLayer.set(layer);
+  }
+
+  toggleSidebar(): void {
+    this.sidebarCollapsed.update((collapsed) => !collapsed);
+  }
+
+  setSidebarCollapsed(collapsed: boolean): void {
+    this.sidebarCollapsed.set(collapsed);
   }
 }

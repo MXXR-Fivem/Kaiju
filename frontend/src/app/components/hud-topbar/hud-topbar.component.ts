@@ -35,8 +35,9 @@ import { HudWindowService } from '../../services/hud-window.service';
       </div>
 
       <div class="flex items-center gap-1.5">
-        <button (click)="hud.toggle('inventory')"
-                [ngClass]="isWindowOpen('inventory') ? 'bg-green-500 text-black border-green-500' : 'bg-black text-zinc-400 border-zinc-800 hover:border-green-500 hover:text-green-400'"
+        <button (click)="context.toggleSidebar()"
+                [title]="context.sidebarCollapsed() ? 'Deplier le panneau BO des stocks' : 'Replier le panneau BO des stocks'"
+                [ngClass]="!context.sidebarCollapsed() ? 'bg-green-500 text-black border-green-500' : 'bg-black text-zinc-400 border-zinc-800 hover:border-green-500 hover:text-green-400'"
                 class="px-2.5 py-1 border text-[11px] font-bold tracking-wider uppercase transition-colors">
           [STOCKS]
         </button>
