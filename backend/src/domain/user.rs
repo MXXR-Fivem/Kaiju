@@ -1,46 +1,25 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::fmt;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum UserRole {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+pub enum Role {
     QC,
     LC,
     CD,
 }
 
-impl std::str::FromStr for UserRole {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().as_str() {
-            "QC" => Ok(UserRole::QC),
-            "LC" => Ok(UserRole::LC),
-            "CD" => Ok(UserRole::CD),
-            _ => Err(format!("Role non reconnu : {}", s)),
-        }
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
-impl ToString for UserRole {
-    fn to_string(&self) -> String {
-        match self {
-            UserRole::QC => "QC".to_string(),
-            UserRole::LC => "LC".to_string(),
-            UserRole::CD => "CD".to_string(),
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct UserAccount {
+#[derive(Debug, Clone, FromRow)]
+pub struct User {
     pub id: String,
     pub username: String,
-    #[serde(skip_serializing)]
     pub password_hash: String,
-    pub display_name: String,
-    pub role: String,
-    pub assigned_district_id: Option<String>,
+    pub role: Role,
+    pub district_code: Option<String>,
 }

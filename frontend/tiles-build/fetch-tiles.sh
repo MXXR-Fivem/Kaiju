@@ -1,7 +1,4 @@
 #!/bin/sh
-# Downloads the Tokyork AOI basemap tiles (z11-16) listed in tile-list.txt
-# so the frontend can serve them locally, with no runtime dependency on
-# server.arcgisonline.com.
 set -eu
 
 OUT_DIR="$1"
@@ -31,9 +28,6 @@ fetch_batch() {
 
 fetch_batch "$LIST" "$CONCURRENCY" "$OUT_DIR/failed.log"
 
-# a handful of tiles routinely fail under high concurrency (transient
-# rate-limiting, not missing tiles) — a slow, low-concurrency retry pass
-# clears them without having to patch a running container by hand.
 attempt=0
 while [ -s "$OUT_DIR/failed.log" ] && [ "$attempt" -lt 3 ]; do
   attempt=$((attempt + 1))

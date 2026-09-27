@@ -1,105 +1,92 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { CrisisContextService } from '../../services/crisis-context.service';
-import { KaijuApiService } from '../../services/kaiju-api.service';
-import { TransferRequestDetail } from '../../models/kaiju.models';
+
+interface CalendarEvent {
+  start: Date;
+  end: Date;
+  kind: 'RESERVATION' | 'CONVOY';
+  title: string;
+}
+
+const DAY_MS = 24 * 3600000;
 
 @Component({
   selector: 'app-calendar-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [DatePipe],
   template: `
-    <div class="h-full flex flex-col font-mono text-xs select-none space-y-3">
-      <div class="p-2 bg-zinc-950 border border-zinc-800 flex items-center justify-between text-[11px]">
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 bg-green-500 animate-ping"></span>
-          <span class="text-zinc-400 uppercase">SYNCHRONISATION STRATEGIQUE :</span>
-        </div>
-        <span class="font-bold text-green-400 tracking-widest">{{ currentTime }}</span>
+    <div class="h-full flex flex-col font-mono text-xs space-y-3">
+      <div class="flex items-center justify-between">
+        <button class="hud-tab" (click)="shift(-7)">◀ Semaine précédente</button>
+        <span class="text-zinc-400 uppercase">{{ weekStart() | date: 'dd/MM' }} — {{ weekEnd() | date: 'dd/MM' }}</span>
+        <button class="hud-tab" (click)="shift(7)">Semaine suivante ▶</button>
       </div>
 
       <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-        <div>
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider pb-1 mb-2 border-b border-zinc-900">
-            CHRONOLOGIE DES CONVOIS LOGISTIQUES
-          </div>
-
-          <div *ngIf="transfers.length === 0"
-               class="p-4 text-center text-zinc-600 text-[11px] border border-dashed border-zinc-900">
-            AUCUN CONVOI PLANIFIE DANS LE COULOIR DE TOKYORK
-          </div>
-
-          <div class="space-y-2">
-            <div *ngFor="let t of transfers" class="p-2 bg-black border border-zinc-800 space-y-1.5">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-1.5">
-                  <span class="px-1 border text-[9px] uppercase font-bold"
-                        [ngClass]="t.route_type === 'SEA' ? 'border-sky-500 text-sky-400' : 'border-zinc-700 text-zinc-300'">
-                    [{{ t.route_type === 'SEA' ? 'MER' : 'TERRE' }}]
-                  </span>
-                  <strong class="text-white text-xs">
-                    [{{ t.source_district_code }}] &rarr; [{{ t.target_district_code }}]
-                  </strong>
-                  <span class="text-zinc-400">
-                    ({{ t.quantity }} {{ t.unit }} {{ t.resource_name }})
-                  </span>
-                </div>
-
-                <span class="text-[9px] px-1.5 py-0.2 border uppercase font-bold"
-                      [ngClass]="t.status === 'IN_TRANSIT' ? 'border-sky-500 text-sky-400 bg-sky-950/40' : 'border-zinc-800 text-zinc-400'">
-                  {{ t.status }}
+        @for (day of days(); track day.date.getTime()) {
+          <section>
+            <h3 class="hud-title">{{ day.date | date: 'EEEE dd/MM' }}</h3>
+            @for (event of day.events; track $index) {
+              <div class="flex gap-2 py-0.5" data-testid="calendar-event">
+                <span class="w-24 text-zinc-500">{{ event.start | date: 'HH:mm' }} → {{ event.end | date: 'HH:mm' }}</span>
+                <span [class.text-sky-400]="event.kind === 'CONVOY'" [class.text-amber-400]="event.kind === 'RESERVATION'">
+                  {{ event.kind === 'CONVOY' ? 'Convoi' : 'Réservation' }}
                 </span>
+                <span class="text-zinc-200">{{ event.title }}</span>
               </div>
-
-              <div class="grid grid-cols-3 gap-2 text-[10px] text-zinc-500 pt-1 border-t border-zinc-900">
-                <div>ROUTE : <strong class="text-zinc-300">{{ t.route_type === 'SEA' ? 'MARITIME (TEMPS x2)' : 'TERRESTRE' }}</strong></div>
-                <div>TRANSIT : <strong class="text-zinc-300">{{ t.transit_district_code || 'DIRECT' }}</strong></div>
-                <div>DUREE EST. : <strong class="text-green-400">{{ t.estimated_duration_minutes }} MIN</strong></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider pb-1 mb-2 border-b border-zinc-900">
-            PROTOCOLES CRITIQUES PAR NIVEAU
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 text-[10px]">
-            <div class="p-2 bg-zinc-950 border border-zinc-800 space-y-0.5">
-              <span class="text-amber-400 font-bold">[NIVEAU 3]</span>
-              <p class="text-zinc-400">Deblocage des transferts directs entre quartiers adjacents.</p>
-            </div>
-            <div class="p-2 bg-zinc-950 border border-zinc-800 space-y-0.5">
-              <span class="text-amber-500 font-bold">[NIVEAU 4]</span>
-              <p class="text-zinc-400">Deblocage des transits etendus via le carrefour Xeno (approbation LC requise).</p>
-            </div>
-            <div class="p-2 bg-zinc-950 border border-zinc-800 space-y-0.5 col-span-2">
-              <span class="text-red-500 font-bold">[NIVEAU 5]</span>
-              <p class="text-zinc-400">Autorisation exceptionnelle City Director (CD) : retention abaissee a 15%.</p>
-            </div>
-          </div>
-        </div>
+            } @empty {
+              <p class="text-zinc-600">—</p>
+            }
+          </section>
+        }
       </div>
     </div>
   `
 })
-export class CalendarPanelComponent implements OnInit {
-  context = inject(CrisisContextService);
-  private api = inject(KaijuApiService);
+export class CalendarPanelComponent {
+  private context = inject(CrisisContextService);
 
-  transfers: TransferRequestDetail[] = [];
-  currentTime = '';
+  readonly weekStart = signal(this.startOfDay(new Date()));
+  readonly weekEnd = computed(() => new Date(this.weekStart().getTime() + 6 * DAY_MS));
 
-  ngOnInit(): void {
-    this.updateTime();
-    setInterval(() => this.updateTime(), 1000);
-    this.api.getTransfers().subscribe((t) => (this.transfers = t));
+  readonly events = computed<CalendarEvent[]>(() => [
+    ...this.context
+      .reservations()
+      .filter((r) => r.status === 'ACTIVE')
+      .map((r) => ({
+        start: new Date(r.starts_at),
+        end: new Date(r.ends_at),
+        kind: 'RESERVATION' as const,
+        title: `[${r.district_code}] ${r.team_name} · ${r.quantity} × ${r.resource_name}`
+      })),
+    ...this.context
+      .transfers()
+      .filter((t) => t.departed_at && t.arrival_at)
+      .map((t) => ({
+        start: new Date(t.departed_at!),
+        end: new Date(t.arrival_at!),
+        kind: 'CONVOY' as const,
+        title: `${t.source_code} → ${t.target_code} · ${t.quantity} × ${t.resource_name} (${t.status})`
+      }))
+  ]);
+
+  readonly days = computed(() =>
+    Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(this.weekStart().getTime() + index * DAY_MS);
+      const end = date.getTime() + DAY_MS;
+      const events = this.events()
+        .filter((event) => event.start.getTime() < end && event.end.getTime() >= date.getTime())
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+      return { date, events };
+    })
+  );
+
+  shift(days: number): void {
+    this.weekStart.update((start) => new Date(start.getTime() + days * DAY_MS));
   }
 
-  private updateTime(): void {
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    this.currentTime = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC (ZULU)`;
+  private startOfDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 }

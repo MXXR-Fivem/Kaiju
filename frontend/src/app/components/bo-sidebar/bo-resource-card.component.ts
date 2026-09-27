@@ -12,6 +12,7 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="relative border bg-zinc-950/70 p-2.5 transition-colors duration-300 hover:bg-zinc-900/60"
+             [attr.data-testid]="'stock-' + stock.code"
              [ngClass]="stock.gauge.level === 'CRITICAL' ? 'border-red-900/80 border-l-2 border-l-red-500' : 'border-zinc-800 hover:border-zinc-600'">
       <div class="flex items-start gap-3">
         <div class="flex-1 min-w-0 space-y-2">
@@ -30,8 +31,8 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
                 </span>
               </div>
               <div class="text-[9px] text-zinc-500 uppercase tracking-widest truncate">
-                {{ stock.code }} // {{ stock.unit }}
-                <span *ngIf="stock.gauge.belowRetention" class="text-red-400">// SOUS SEUIL</span>
+                {{ stock.code }}
+                <span *ngIf="stock.gauge.belowRetention" class="text-red-400">· SOUS SEUIL</span>
               </div>
             </div>
           </div>
@@ -40,7 +41,6 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
             <span class="text-[9px] text-zinc-500 tracking-widest">DISPO</span>
             <span class="text-base font-bold tabular-nums" [ngClass]="tone.text">{{ stock.figures.available | number:'1.0-0' }}</span>
             <span class="text-[10px] text-zinc-500 tabular-nums">/ {{ stock.figures.initial | number:'1.0-0' }}</span>
-            <span class="text-[9px] text-zinc-500 uppercase truncate">{{ stock.unit }}</span>
           </div>
 
           <app-bo-capacity-bar
@@ -48,20 +48,20 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
             [reservedPct]="stock.gauge.reservedPct"
             [thresholdPct]="stock.gauge.thresholdPct"
             [availableCls]="tone.bg"
-            [thresholdLabel]="'SEUIL DE RETENTION : ' + stock.figures.minRetained + ' ' + stock.unit">
+            [thresholdLabel]="'SEUIL DE RETENTION : ' + stock.figures.minRetained">
           </app-bo-capacity-bar>
 
           <div class="grid grid-cols-4 gap-1 text-[9px] uppercase tracking-wider">
             <div class="border-l border-zinc-800 pl-1.5 min-w-0">
               <div class="text-zinc-500">STOCK</div>
-              <div class="text-[11px] text-zinc-200 font-bold tabular-nums truncate">{{ stock.figures.current | number:'1.0-0' }}</div>
+              <div class="text-[11px] text-zinc-200 font-bold tabular-nums truncate" data-testid="current">{{ stock.figures.current | number:'1.0-0' }}</div>
             </div>
             <div class="border-l border-cyan-900 pl-1.5 min-w-0">
               <div class="text-zinc-500">RESERVE</div>
-              <div class="text-[11px] text-cyan-300 font-bold tabular-nums truncate">{{ stock.figures.reserved | number:'1.0-0' }}</div>
+              <div class="text-[11px] text-cyan-300 font-bold tabular-nums truncate" data-testid="reserved">{{ stock.figures.reserved | number:'1.0-0' }}</div>
             </div>
             <div class="border-l border-zinc-800 pl-1.5 min-w-0">
-              <div class="text-zinc-500">SEUIL {{ (stock.retentionPct * 100) | number:'1.0-0' }}%</div>
+              <div class="text-zinc-500">SEUIL {{ stock.retentionPct | number:'1.0-0' }}%</div>
               <div class="text-[11px] text-zinc-300 font-bold tabular-nums truncate">{{ stock.figures.minRetained | number:'1.0-0' }}</div>
             </div>
             <div class="border-l border-zinc-800 pl-1.5 min-w-0">
@@ -77,7 +77,7 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
             <button *ngFor="let d of stock.districts; trackBy: trackByCode"
                     type="button"
                     (click)="districtSelect.emit(d.code)"
-                    [title]="d.name + ' : ' + d.figures.available + ' / ' + d.figures.initial + ' ' + stock.unit + ' ' + levelStyle(d).tag"
+                    [title]="d.name + ' : ' + d.figures.available + ' / ' + d.figures.initial + ' ' + levelStyle(d).tag"
                     class="group text-left border border-zinc-800 hover:border-zinc-500 bg-black px-1 py-0.5 transition-colors">
               <div class="flex items-center justify-between text-[8px] tracking-widest">
                 <span class="text-zinc-400 group-hover:text-white font-bold">[{{ d.code }}]</span>

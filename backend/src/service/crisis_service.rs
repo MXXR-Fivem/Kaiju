@@ -1,135 +1,81 @@
-use std::sync::Arc;
+use chrono::Utc;
 use uuid::Uuid;
-use crate::domain::{DisasterEvent, RulesEngine};
-use crate::errors::AppError;
-use crate::repository::{DisasterRepository, DistrictRepository, ResourceRepository};
-use crate::ws::{WsEvent, WsHub};
 
-pub struct CrisisService {
-    district_repo: Arc<DistrictRepository>,
-    disaster_repo: Arc<DisasterRepository>,
-    resource_repo: Arc<ResourceRepository>,
-    ws_hub: Arc<WsHub>,
+use crate::auth::AuthUser;
+use crate::domain::rules::{self, Action, DEFAULT_RETENTION_PCT, LOWERED_RETENTION_PCT};
+use crate::domain::{Disaster, DisasterType, District};
+use crate::errors::AppError;
+use crate::repository::{self, disaster_repo, district_repo, resource_repo};
+use crate::state::AppState;
+use crate::ws::WsEvent;
+
+pub async fn trigger(
+    state: &AppState,
+    district_code: &str,
+    disaster_type: DisasterType,
+    level: i64,
+) -> Result<Disaster, AppError> {
+    if !(1..=5).contains(&level) {
+        return Err(AppError::Validation("Le niveau doit être compris entre 1 et 5.".into()));
+    }
+    let district = district_repo::find(&state.db, district_code).await?;
+    if disaster_type == DisasterType::Tsunami && !district.is_coastal {
+        return Err(AppError::Validation(format!("Un tsunami ne peut pas frapper {} : quartier sans accès à la baie.", district.name)));
+    }
+    let now = Utc::now();
+    let disaster = Disaster {
+        id: Uuid::new_v4().to_string(),
+        district_code: district.code.clone(),
+        disaster_type,
+        level,
+        active: true,
+        triggered_at: now,
+        resolved_at: None,
+    };
+    let mut tx = state.db.begin().await?;
+    disaster_repo::resolve(&mut *tx, &district.code, now).await?;
+    disaster_repo::insert(&mut *tx, &disaster).await?;
+    district_repo::set_level(&mut *tx, &district.code, level).await?;
+    tx.commit().await?;
+
+    announce_level(state, &district, level).await?;
+    Ok(disaster)
 }
 
-impl CrisisService {
-    pub fn new(
-        district_repo: Arc<DistrictRepository>,
-        disaster_repo: Arc<DisasterRepository>,
-        resource_repo: Arc<ResourceRepository>,
-        ws_hub: Arc<WsHub>,
-    ) -> Self {
-        Self {
-            district_repo,
-            disaster_repo,
-            resource_repo,
-            ws_hub,
-        }
+pub async fn resolve(state: &AppState, district_code: &str) -> Result<(), AppError> {
+    let district = district_repo::find(&state.db, district_code).await?;
+    let mut tx = state.db.begin().await?;
+    disaster_repo::resolve(&mut *tx, &district.code, Utc::now()).await?;
+    district_repo::set_level(&mut *tx, &district.code, 1).await?;
+    tx.commit().await?;
+
+    announce_level(state, &district, 1).await
+}
+
+pub async fn lower_retention(state: &AppState, user: &AuthUser) -> Result<(), AppError> {
+    rules::authorize(Action::LowerRetention, user.role, district_repo::city_level(&state.db).await?)?;
+    if resource_repo::set_retention(&state.db, LOWERED_RETENTION_PCT).await? {
+        state.hub.send(WsEvent::RetentionChanged { retention_pct: LOWERED_RETENTION_PCT });
     }
+    Ok(())
+}
 
-    pub async fn trigger_disaster(
-        &self,
-        district_id_or_code: &str,
-        disaster_type: &str,
-        intensity: i64,
-        triggered_by: &str,
-    ) -> Result<DisasterEvent, AppError> {
-        let district = if let Some(d) = self.district_repo.find_by_code(district_id_or_code).await? {
-            d
-        } else if let Some(d) = self.district_repo.find_by_id(district_id_or_code).await? {
-            d
-        } else {
-            return Err(AppError::NotFound(format!("Quartier '{}' introuvable.", district_id_or_code)));
-        };
+pub async fn reset(state: &AppState) -> Result<(), AppError> {
+    repository::reset(&state.db).await?;
+    state.hub.send(WsEvent::Reset);
+    Ok(())
+}
 
-        RulesEngine::validate_disaster_target(&district.code, district.is_coastal, disaster_type)?;
-
-        let calculated_level = match intensity {
-            1..=20 => 1,
-            21..=40 => 2,
-            41..=60 => 3,
-            61..=80 => 4,
-            _ => 5,
-        };
-
-        let disaster_id = format!("dis_{}", Uuid::new_v4().simple());
-        let event = self.disaster_repo.create_disaster(
-            &disaster_id,
-            &district.id,
-            disaster_type,
-            intensity,
-            calculated_level,
-            triggered_by,
-        ).await?;
-
-        self.ws_hub.broadcast_event(WsEvent::DisasterTriggered {
-            disaster_id: event.id.clone(),
-            district_id: district.id.clone(),
-            district_code: district.code.clone(),
-            disaster_type: disaster_type.to_string(),
-            intensity,
-            level: calculated_level,
-        });
-
-        self.ws_hub.broadcast_event(WsEvent::Alert {
-            severity: if calculated_level >= 4 { "CRITICAL".to_string() } else { "WARNING".to_string() },
-            title: format!("ALERTE CATASTROPHE : {} DANS {}", disaster_type, district.name),
-            message: format!("Intensite : {}/100. Niveau d'urgence : {}.", intensity, calculated_level),
-        });
-
-        Ok(event)
+async fn announce_level(state: &AppState, district: &District, level: i64) -> Result<(), AppError> {
+    let city_level = district_repo::city_level(&state.db).await?;
+    if city_level < 5 && resource_repo::set_retention(&state.db, DEFAULT_RETENTION_PCT).await? {
+        state.hub.send(WsEvent::RetentionChanged { retention_pct: DEFAULT_RETENTION_PCT });
     }
-
-    pub async fn resolve_disaster(&self) -> Result<Option<DisasterEvent>, AppError> {
-        let resolved = self.disaster_repo.resolve_active_disaster().await?;
-
-        if let Some(ref d) = resolved {
-            let district = self.district_repo.find_by_id(&d.district_id).await?;
-            let code = district.map(|x| x.code).unwrap_or_else(|| "UNKNOWN".to_string());
-
-            self.ws_hub.broadcast_event(WsEvent::DisasterResolved {
-                disaster_id: d.id.clone(),
-                district_id: d.district_id.clone(),
-                district_code: code,
-            });
-
-            self.ws_hub.broadcast_event(WsEvent::Alert {
-                severity: "INFO".to_string(),
-                title: "FIN D'ALERTE".to_string(),
-                message: "La catastrophe a ete maitrisee. Retour au niveau nominal.".to_string(),
-            });
-        }
-
-        Ok(resolved)
-    }
-
-    pub async fn apply_retention_override(
-        &self,
-        district_id_or_code: &str,
-        user_role: &str,
-    ) -> Result<f64, AppError> {
-        let district = if let Some(d) = self.district_repo.find_by_code(district_id_or_code).await? {
-            d
-        } else if let Some(d) = self.district_repo.find_by_id(district_id_or_code).await? {
-            d
-        } else {
-            return Err(AppError::NotFound(format!("Quartier '{}' introuvable.", district_id_or_code)));
-        };
-
-        let new_pct = RulesEngine::validate_retention_override(user_role, district.current_disaster_level)?;
-
-        self.resource_repo.update_retention_override(&district.id, new_pct).await?;
-
-        self.ws_hub.broadcast_event(WsEvent::Alert {
-            severity: "CRITICAL".to_string(),
-            title: format!("ORDRE CITY DIRECTOR : Seuil a 15% ({})", district.code),
-            message: format!("Le quartier {} a recu l'autorisation exceptionnelle de puiser jusqu'a 15%.", district.name),
-        });
-
-        Ok(new_pct)
-    }
-
-    pub async fn get_active_disaster(&self) -> Result<Option<DisasterEvent>, AppError> {
-        self.disaster_repo.find_active().await
-    }
+    state.hub.send(WsEvent::LevelChanged {
+        district: district.code.clone(),
+        previous_level: district.disaster_level,
+        level,
+        city_level,
+    });
+    Ok(())
 }

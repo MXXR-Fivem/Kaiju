@@ -1,107 +1,70 @@
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{post, web, HttpResponse};
 use serde::Deserialize;
-use std::sync::Arc;
+
+use crate::auth::AuthUser;
+use crate::domain::DisasterType;
 use crate::errors::AppError;
-use crate::service::CrisisService;
+use crate::service::crisis_service;
+use crate::state::AppState;
 
 #[derive(Deserialize)]
-pub struct GodModeTriggerRequest {
-    pub secret_password: String,
-    pub district_target: String,
-    pub disaster_type: String,
-    pub intensity: i64,
+pub struct GodMode {
+    pub password: String,
 }
 
 #[derive(Deserialize)]
-pub struct RetentionOverrideRequest {
-    pub secret_password: String,
-    pub district_target: String,
-    pub user_role: String,
+pub struct DisasterOrder {
+    pub password: String,
+    pub district: String,
+    pub disaster_type: DisasterType,
+    pub level: i64,
 }
 
 #[derive(Deserialize)]
-pub struct GodModeAuthRequest {
-    pub secret_password: String,
+pub struct ResolveOrder {
+    pub password: String,
+    pub district: String,
 }
 
-#[get("/api/disaster/active")]
-pub async fn get_active_disaster(
-    service: web::Data<Arc<CrisisService>>,
-) -> Result<HttpResponse, AppError> {
-    let disaster = service.get_active_disaster().await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "active_disaster": disaster
-    })))
+fn check_god_mode(state: &AppState, password: &str) -> Result<(), AppError> {
+    match &state.god_mode_password {
+        Some(expected) if expected == password => Ok(()),
+        _ => Err(AppError::Unauthorized("Mot de passe god mode invalide.".into())),
+    }
 }
 
-#[post("/api/disaster/resolve")]
-pub async fn resolve_disaster(
-    service: web::Data<Arc<CrisisService>>,
-) -> Result<HttpResponse, AppError> {
-    let resolved = service.resolve_disaster().await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "status": "RESOLVED",
-        "disaster": resolved
-    })))
+#[post("/api/retention/lower")]
+pub async fn lower_retention(state: web::Data<AppState>, user: AuthUser) -> Result<HttpResponse, AppError> {
+    crisis_service::lower_retention(&state, &user).await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[post("/api/god-mode/verify")]
-pub async fn verify_god_mode_auth(
-    body: web::Json<GodModeAuthRequest>,
-) -> Result<HttpResponse, AppError> {
-    let expected = std::env::var("GOD_MODE_PASSWORD").unwrap_or_else(|_| "kaiju-omega-protocol-2026".to_string());
-    if body.secret_password != expected {
-        return Err(AppError::UnauthorizedGodMode);
-    }
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "authenticated": true,
-        "role": "GOD_ADMIN"
-    })))
+pub async fn god_mode_verify(state: web::Data<AppState>, body: web::Json<GodMode>) -> Result<HttpResponse, AppError> {
+    check_god_mode(&state, &body.password)?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
-#[post("/api/god-mode/trigger")]
+#[post("/api/god-mode/disasters")]
 pub async fn god_mode_trigger(
-    body: web::Json<GodModeTriggerRequest>,
-    service: web::Data<Arc<CrisisService>>,
+    state: web::Data<AppState>,
+    body: web::Json<DisasterOrder>,
 ) -> Result<HttpResponse, AppError> {
-    let req = body.into_inner();
-    let expected = std::env::var("GOD_MODE_PASSWORD").unwrap_or_else(|_| "kaiju-omega-protocol-2026".to_string());
-
-    if req.secret_password != expected {
-        return Err(AppError::UnauthorizedGodMode);
-    }
-
-    let disaster = service.trigger_disaster(
-        &req.district_target,
-        &req.disaster_type,
-        req.intensity,
-        "GOD_MODE",
-    ).await?;
-
+    check_god_mode(&state, &body.password)?;
+    let disaster = crisis_service::trigger(&state, &body.district, body.disaster_type, body.level).await?;
     Ok(HttpResponse::Created().json(disaster))
 }
 
-#[post("/api/god-mode/retention-override")]
-pub async fn god_mode_retention_override(
-    body: web::Json<RetentionOverrideRequest>,
-    service: web::Data<Arc<CrisisService>>,
-) -> Result<HttpResponse, AppError> {
-    let req = body.into_inner();
-    let expected = std::env::var("GOD_MODE_PASSWORD").unwrap_or_else(|_| "kaiju-omega-protocol-2026".to_string());
+#[post("/api/god-mode/resolve")]
+pub async fn god_mode_resolve(state: web::Data<AppState>, body: web::Json<ResolveOrder>) -> Result<HttpResponse, AppError> {
+    check_god_mode(&state, &body.password)?;
+    crisis_service::resolve(&state, &body.district).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
 
-    if req.secret_password != expected {
-        return Err(AppError::UnauthorizedGodMode);
-    }
-
-    let new_pct = service.apply_retention_override(
-        &req.district_target,
-        &req.user_role,
-    ).await?;
-
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "status": "OVERRIDDEN",
-        "district": req.district_target,
-        "new_min_retention_pct": new_pct,
-        "message": "Seuil de retention abaisse a 15% par prerogative du City Director."
-    })))
+#[post("/api/god-mode/reset")]
+pub async fn god_mode_reset(state: web::Data<AppState>, body: web::Json<GodMode>) -> Result<HttpResponse, AppError> {
+    check_god_mode(&state, &body.password)?;
+    crisis_service::reset(&state).await?;
+    Ok(HttpResponse::NoContent().finish())
 }

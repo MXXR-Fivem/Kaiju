@@ -1,58 +1,27 @@
-use sqlx::{Pool, Sqlite};
-use crate::domain::UserAccount;
+use chrono::Utc;
+use sqlx::SqlitePool;
+
+use crate::domain::User;
 use crate::errors::AppError;
 
-pub struct UserRepository {
-    pool: Pool<Sqlite>,
+pub async fn find_by_username(db: &SqlitePool, username: &str) -> Result<Option<User>, AppError> {
+    Ok(sqlx::query_as("SELECT id, username, password_hash, role, district_code FROM users WHERE username = ?")
+        .bind(username)
+        .fetch_optional(db)
+        .await?)
 }
 
-impl UserRepository {
-    pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
-    }
-
-    #[allow(dead_code)]
-    pub async fn find_all(&self) -> Result<Vec<UserAccount>, AppError> {
-        let users = sqlx::query_as::<_, UserAccount>(
-            r#"
-            SELECT id, username, password_hash, display_name, role, assigned_district_id
-            FROM user_accounts
-            ORDER BY role ASC, username ASC
-            "#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(users)
-    }
-
-    pub async fn find_by_id(&self, id: &str) -> Result<Option<UserAccount>, AppError> {
-        let user = sqlx::query_as::<_, UserAccount>(
-            r#"
-            SELECT id, username, password_hash, display_name, role, assigned_district_id
-            FROM user_accounts
-            WHERE id = $1
-            "#
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(user)
-    }
-
-    pub async fn find_by_username(&self, username: &str) -> Result<Option<UserAccount>, AppError> {
-        let user = sqlx::query_as::<_, UserAccount>(
-            r#"
-            SELECT id, username, password_hash, display_name, role, assigned_district_id
-            FROM user_accounts
-            WHERE username = $1
-            "#
-        )
-        .bind(username)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(user)
-    }
+pub async fn insert(db: &SqlitePool, user: &User) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO users (id, username, password_hash, role, district_code, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&user.id)
+    .bind(&user.username)
+    .bind(&user.password_hash)
+    .bind(user.role)
+    .bind(&user.district_code)
+    .bind(Utc::now())
+    .execute(db)
+    .await?;
+    Ok(())
 }

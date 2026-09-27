@@ -1,126 +1,90 @@
 import { Injectable, inject, isDevMode } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  Disaster,
+  DisasterType,
   District,
-  DistrictAdjacency,
-  ResourceType,
-  DistrictResourceDetail,
-  TransferRequestDetail,
-  DisasterEvent
+  NewReservation,
+  NewTransfer,
+  Reservation,
+  Stock,
+  Transfer
 } from '../models/kaiju.models';
 
-@Injectable({
-  providedIn: 'root'
-})
+export const API_URL = isDevMode() ? 'http://localhost:8080/api' : '/api';
+
+export function describeError(error: HttpErrorResponse): string {
+  const body = error.error;
+  return body?.error_code ? `[${body.error_code}] ${body.message}` : `Erreur réseau (${error.status}).`;
+}
+
+@Injectable({ providedIn: 'root' })
 export class KaijuApiService {
   private http = inject(HttpClient);
-  private baseUrl = this.resolveBaseUrl();
-
-  private resolveBaseUrl(): string {
-    if (isDevMode()) {
-      return 'http://localhost:8080/api';
-    }
-    return '/api';
-  }
 
   getDistricts(): Observable<District[]> {
-    return this.http.get<District[]>(`${this.baseUrl}/districts`);
+    return this.http.get<District[]>(`${API_URL}/districts`);
   }
 
-  getDistrict(codeOrId: string): Observable<District> {
-    return this.http.get<District>(`${this.baseUrl}/districts/${codeOrId}`);
+  getDisasters(): Observable<Disaster[]> {
+    return this.http.get<Disaster[]>(`${API_URL}/disasters`);
   }
 
-  getDistrictAdjacencies(codeOrId: string): Observable<DistrictAdjacency[]> {
-    return this.http.get<DistrictAdjacency[]>(`${this.baseUrl}/districts/${codeOrId}/adjacencies`);
+  getStocks(): Observable<Stock[]> {
+    return this.http.get<Stock[]>(`${API_URL}/stocks`);
   }
 
-  getResourceTypes(): Observable<ResourceType[]> {
-    return this.http.get<ResourceType[]>(`${this.baseUrl}/resources/types`);
+  getTransfers(): Observable<Transfer[]> {
+    return this.http.get<Transfer[]>(`${API_URL}/transfers`);
   }
 
-  getInventory(districtCode?: string): Observable<DistrictResourceDetail[]> {
-    const url = districtCode
-      ? `${this.baseUrl}/resources/inventory/${districtCode}`
-      : `${this.baseUrl}/resources/inventory`;
-    return this.http.get<DistrictResourceDetail[]>(url);
+  getReservations(): Observable<Reservation[]> {
+    return this.http.get<Reservation[]>(`${API_URL}/reservations`);
   }
 
-  reserveResource(data: {
-    district_id_or_code: string;
-    resource_code: string;
-    user_id: string;
-    team_name: string;
-    quantity: number;
-  }): Observable<{ status: string; reservation_id: string; message: string }> {
-    return this.http.post<{ status: string; reservation_id: string; message: string }>(
-      `${this.baseUrl}/resources/reserve`,
-      data
-    );
+  createTransfer(transfer: NewTransfer): Observable<Transfer> {
+    return this.http.post<Transfer>(`${API_URL}/transfers`, transfer);
   }
 
-  releaseReservation(id: string): Observable<{ status: string; reservation_id: string }> {
-    return this.http.post<{ status: string; reservation_id: string }>(
-      `${this.baseUrl}/resources/reserve/${id}/release`,
-      {}
-    );
+  reviewTransfer(id: string, approved: boolean): Observable<Transfer> {
+    return this.http.post<Transfer>(`${API_URL}/transfers/${id}/review`, { approved });
   }
 
-  getTransfers(): Observable<TransferRequestDetail[]> {
-    return this.http.get<TransferRequestDetail[]>(`${this.baseUrl}/transfers`);
+  deliverTransfer(id: string): Observable<Transfer> {
+    return this.http.post<Transfer>(`${API_URL}/transfers/${id}/deliver`, {});
   }
 
-  createTransfer(data: {
-    requester_id: string;
-    source_district: string;
-    target_district: string;
-    resource_code: string;
-    quantity: number;
-    route_type: string;
-  }): Observable<any> {
-    return this.http.post<any>(`${this.baseUrl}/transfers`, data);
+  reserve(reservation: NewReservation): Observable<Reservation> {
+    return this.http.post<Reservation>(`${API_URL}/reservations`, reservation);
   }
 
-  reviewTransit(id: string, approver_role: string, approved: boolean): Observable<any> {
-    return this.http.post<any>(`${this.baseUrl}/transfers/${id}/transit`, {
-      approver_role,
-      approved
+  returnReservation(id: string): Observable<Reservation> {
+    return this.http.post<Reservation>(`${API_URL}/reservations/${id}/return`, {});
+  }
+
+  lowerRetention(): Observable<void> {
+    return this.http.post<void>(`${API_URL}/retention/lower`, {});
+  }
+
+  verifyGodMode(password: string): Observable<void> {
+    return this.http.post<void>(`${API_URL}/god-mode/verify`, { password });
+  }
+
+  triggerDisaster(password: string, district: string, disasterType: DisasterType, level: number): Observable<Disaster> {
+    return this.http.post<Disaster>(`${API_URL}/god-mode/disasters`, {
+      password,
+      district,
+      disaster_type: disasterType,
+      level
     });
   }
 
-  completeDelivery(id: string): Observable<any> {
-    return this.http.post<any>(`${this.baseUrl}/transfers/${id}/deliver`, {});
+  resolveDisaster(password: string, district: string): Observable<void> {
+    return this.http.post<void>(`${API_URL}/god-mode/resolve`, { password, district });
   }
 
-  getActiveDisaster(): Observable<{ active_disaster: DisasterEvent | null }> {
-    return this.http.get<{ active_disaster: DisasterEvent | null }>(`${this.baseUrl}/disaster/active`);
-  }
-
-  resolveDisaster(): Observable<{ status: string; disaster: DisasterEvent | null }> {
-    return this.http.post<{ status: string; disaster: DisasterEvent | null }>(`${this.baseUrl}/disaster/resolve`, {});
-  }
-
-  verifyGodMode(secret_password: string): Observable<{ authenticated: boolean; role: string }> {
-    return this.http.post<{ authenticated: boolean; role: string }>(`${this.baseUrl}/god-mode/verify`, {
-      secret_password
-    });
-  }
-
-  triggerGodMode(data: {
-    secret_password: string;
-    district_target: string;
-    disaster_type: string;
-    intensity: number;
-  }): Observable<DisasterEvent> {
-    return this.http.post<DisasterEvent>(`${this.baseUrl}/god-mode/trigger`, data);
-  }
-
-  overrideRetention(data: {
-    secret_password: string;
-    district_target: string;
-    user_role: string;
-  }): Observable<any> {
-    return this.http.post<any>(`${this.baseUrl}/god-mode/retention-override`, data);
+  resetCity(password: string): Observable<void> {
+    return this.http.post<void>(`${API_URL}/god-mode/reset`, { password });
   }
 }

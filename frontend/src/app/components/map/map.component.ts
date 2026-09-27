@@ -1,11 +1,8 @@
-import { Component, ElementRef, NgZone, OnInit, OnDestroy, ViewChild, effect, inject, untracked } from '@angular/core';
+import { Component, ElementRef, NgZone, OnInit, OnDestroy, ViewChild, computed, effect, inject, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
-import { KaijuApiService } from '../../services/kaiju-api.service';
-import { KaijuWsService } from '../../services/kaiju-ws.service';
 import { CrisisContextService } from '../../services/crisis-context.service';
-import { District, DisasterEvent, TacticalLayer, TACTICAL_LAYERS, DistrictResourceDetail, TransferRequestDetail } from '../../models/kaiju.models';
-import { Subscription } from 'rxjs';
+import { District, DisasterType, LEVEL_COLORS, LEVEL_LABELS, TACTICAL_LAYERS, TacticalLayer } from '../../models/kaiju.models';
 
 const TOKYORK_POLYGONS: Record<string, [number, number][]> = {
   A: [[35.77617, 139.5118], [35.77617, 139.51377], [35.77778, 139.51377], [35.77778, 139.51574], [35.77938, 139.51574], [35.77938, 139.5177], [35.78259, 139.5177], [35.78259, 139.51967], [35.7842, 139.51967], [35.7842, 139.52164], [35.7858, 139.52164], [35.7858, 139.52361], [35.78741, 139.52361], [35.78741, 139.52557], [35.78901, 139.52557], [35.78901, 139.52754], [35.79062, 139.52754], [35.79062, 139.53148], [35.79222, 139.53148], [35.79222, 139.53541], [35.79383, 139.53541], [35.79383, 139.53934], [35.79543, 139.53934], [35.79543, 139.54131], [35.79704, 139.54131], [35.79704, 139.54525], [35.79864, 139.54525], [35.79864, 139.54918], [35.80025, 139.54918], [35.80025, 139.55311], [35.80185, 139.55311], [35.80185, 139.55902], [35.80346, 139.55902], [35.80346, 139.56492], [35.80506, 139.56492], [35.80506, 139.56689], [35.80346, 139.56689], [35.80346, 139.56885], [35.80185, 139.56885], [35.80185, 139.57279], [35.80025, 139.57279], [35.80025, 139.57475], [35.80185, 139.57475], [35.80185, 139.57672], [35.80025, 139.57672], [35.80025, 139.58066], [35.80185, 139.58066], [35.80185, 139.58262], [35.80346, 139.58262], [35.80346, 139.58459], [35.80667, 139.58459], [35.80667, 139.58656], [35.80988, 139.58656], [35.80988, 139.59049], [35.81148, 139.59049], [35.81148, 139.59246], [35.81309, 139.59246], [35.81309, 139.6141], [35.81148, 139.6141], [35.81148, 139.6259], [35.81309, 139.6259], [35.81309, 139.62984], [35.81148, 139.62984], [35.81148, 139.6318], [35.80827, 139.6318], [35.80827, 139.63377], [35.80506, 139.63377], [35.80506, 139.63574], [35.80025, 139.63574], [35.80025, 139.6377], [35.79864, 139.6377], [35.79864, 139.63967], [35.79704, 139.63967], [35.79704, 139.64164], [35.79383, 139.64164], [35.79383, 139.64361], [35.79222, 139.64361], [35.79222, 139.64754], [35.79062, 139.64754], [35.79062, 139.65344], [35.78901, 139.65344], [35.78901, 139.66328], [35.78741, 139.66328], [35.78741, 139.67508], [35.7858, 139.67508], [35.7858, 139.67902], [35.7842, 139.67902], [35.7842, 139.68295], [35.78259, 139.68295], [35.78259, 139.68492], [35.78099, 139.68492], [35.78099, 139.68885], [35.77938, 139.68885], [35.77938, 139.69082], [35.77778, 139.69082], [35.77778, 139.69475], [35.77617, 139.69475], [35.77617, 139.70066], [35.77457, 139.70066], [35.77457, 139.70459], [35.77296, 139.70459], [35.77296, 139.70656], [35.77136, 139.70656], [35.77136, 139.70852], [35.76975, 139.70852], [35.76975, 139.71049], [35.76333, 139.71049], [35.76333, 139.71246], [35.76173, 139.71246], [35.76173, 139.71049], [35.76012, 139.71049], [35.76012, 139.70852], [35.75852, 139.70852], [35.75852, 139.70656], [35.75691, 139.70656], [35.75691, 139.70262], [35.75531, 139.70262], [35.75531, 139.69279], [35.7537, 139.69279], [35.7537, 139.68885], [35.7521, 139.68885], [35.7521, 139.68295], [35.75049, 139.68295], [35.75049, 139.67902], [35.74889, 139.67902], [35.74889, 139.67705], [35.74728, 139.67705], [35.74728, 139.67311], [35.74568, 139.67311], [35.74568, 139.67115], [35.74407, 139.67115], [35.74407, 139.66721], [35.74247, 139.66721], [35.74247, 139.66328], [35.74086, 139.66328], [35.74086, 139.66131], [35.73926, 139.66131], [35.73926, 139.65934], [35.73765, 139.65934], [35.73765, 139.65344], [35.73605, 139.65344], [35.73605, 139.65148], [35.73444, 139.65148], [35.73444, 139.64951], [35.72802, 139.64951], [35.72802, 139.64754], [35.7184, 139.64754], [35.7184, 139.64951], [35.71358, 139.64951], [35.71358, 139.65148], [35.71198, 139.65148], [35.71198, 139.65344], [35.71037, 139.65344], [35.71037, 139.65541], [35.70716, 139.65541], [35.70716, 139.65738], [35.70556, 139.65738], [35.70556, 139.65934], [35.70235, 139.65934], [35.70235, 139.66131], [35.69914, 139.66131], [35.69914, 139.65934], [35.69753, 139.65934], [35.69753, 139.65738], [35.69593, 139.65738], [35.69593, 139.64361], [35.69753, 139.64361], [35.69753, 139.63967], [35.69914, 139.63967], [35.69914, 139.63377], [35.70074, 139.63377], [35.70074, 139.62787], [35.70235, 139.62787], [35.70235, 139.6259], [35.70395, 139.6259], [35.70395, 139.62], [35.70235, 139.62], [35.70235, 139.61803], [35.70395, 139.61803], [35.70395, 139.59049], [35.70556, 139.59049], [35.70556, 139.58852], [35.70395, 139.58852], [35.70395, 139.56885], [35.70556, 139.56885], [35.70556, 139.56098], [35.70716, 139.56098], [35.70716, 139.55508], [35.70877, 139.55508], [35.70877, 139.55115], [35.71037, 139.55115], [35.71037, 139.54918], [35.71198, 139.54918], [35.71198, 139.54525], [35.71358, 139.54525], [35.71358, 139.54328], [35.7184, 139.54328], [35.7184, 139.54131], [35.72, 139.54131], [35.72, 139.53934], [35.7216, 139.53934], [35.7216, 139.53738], [35.72321, 139.53738], [35.72321, 139.53541], [35.72481, 139.53541], [35.72481, 139.53344], [35.72642, 139.53344], [35.72642, 139.53148], [35.72802, 139.53148], [35.72802, 139.52951], [35.72963, 139.52951], [35.72963, 139.52754], [35.73123, 139.52754], [35.73123, 139.52361], [35.73284, 139.52361], [35.73284, 139.51967], [35.73444, 139.51967], [35.73444, 139.5177], [35.73605, 139.5177], [35.73605, 139.51377], [35.73765, 139.51377], [35.73765, 139.50787], [35.73926, 139.50787], [35.73926, 139.5059], [35.74086, 139.5059], [35.74086, 139.50393], [35.74247, 139.50393], [35.74247, 139.5], [35.74568, 139.5], [35.74568, 139.50197], [35.74728, 139.50197], [35.74728, 139.50393], [35.74889, 139.50393], [35.74889, 139.5059], [35.75852, 139.5059], [35.75852, 139.50393], [35.76975, 139.50393], [35.76975, 139.5059], [35.77136, 139.5059], [35.77136, 139.50787], [35.77296, 139.50787], [35.77296, 139.50984], [35.77457, 139.50984], [35.77457, 139.5118]],
@@ -15,12 +12,17 @@ const TOKYORK_POLYGONS: Record<string, [number, number][]> = {
   Z: [[35.50012, 139.77541], [35.50173, 139.77541], [35.50173, 139.77344], [35.50333, 139.77344], [35.50333, 139.76951], [35.50494, 139.76951], [35.50494, 139.76164], [35.50654, 139.76164], [35.50654, 139.75574], [35.50815, 139.75574], [35.50815, 139.7518], [35.50975, 139.7518], [35.50975, 139.74984], [35.51136, 139.74984], [35.51136, 139.7459], [35.51296, 139.7459], [35.51296, 139.74393], [35.51136, 139.74393], [35.51136, 139.71049], [35.50975, 139.71049], [35.50975, 139.70262], [35.50815, 139.70262], [35.50815, 139.70066], [35.50654, 139.70066], [35.50654, 139.69672], [35.50494, 139.69672], [35.50494, 139.69279], [35.50333, 139.69279], [35.50333, 139.67902], [35.50173, 139.67902], [35.50173, 139.67705], [35.50012, 139.67705], [35.50012, 139.67115], [35.50173, 139.67115], [35.50173, 139.66918], [35.50333, 139.66918], [35.50333, 139.66721], [35.50494, 139.66721], [35.50494, 139.65934], [35.51296, 139.65934], [35.51296, 139.65738], [35.52259, 139.65738], [35.52259, 139.65934], [35.5258, 139.65934], [35.5258, 139.66131], [35.53062, 139.66131], [35.53062, 139.65934], [35.53222, 139.65934], [35.53222, 139.65738], [35.53383, 139.65738], [35.53383, 139.65541], [35.53543, 139.65541], [35.53543, 139.65148], [35.53704, 139.65148], [35.53704, 139.64951], [35.53864, 139.64951], [35.53864, 139.64754], [35.54025, 139.64754], [35.54025, 139.64557], [35.54185, 139.64557], [35.54185, 139.64361], [35.54346, 139.64361], [35.54346, 139.64164], [35.54506, 139.64164], [35.54506, 139.64361], [35.54667, 139.64361], [35.54667, 139.64164], [35.54827, 139.64164], [35.54827, 139.63967], [35.54988, 139.63967], [35.54988, 139.6377], [35.55148, 139.6377], [35.55148, 139.63574], [35.55309, 139.63574], [35.55309, 139.63377], [35.55469, 139.63377], [35.55469, 139.6318], [35.5563, 139.6318], [35.5563, 139.62984], [35.55951, 139.62984], [35.55951, 139.62787], [35.56111, 139.62787], [35.56111, 139.6259], [35.56272, 139.6259], [35.56272, 139.62393], [35.56432, 139.62393], [35.56432, 139.62197], [35.56593, 139.62197], [35.56593, 139.62], [35.56753, 139.62], [35.56753, 139.61803], [35.56914, 139.61803], [35.56914, 139.61607], [35.57556, 139.61607], [35.57556, 139.62], [35.57716, 139.62], [35.57716, 139.62197], [35.57556, 139.62197], [35.57556, 139.6259], [35.57716, 139.6259], [35.57716, 139.62984], [35.57556, 139.62984], [35.57556, 139.63377], [35.57716, 139.63377], [35.57716, 139.63574], [35.57877, 139.63574], [35.57877, 139.6377], [35.58037, 139.6377], [35.58037, 139.63967], [35.58198, 139.63967], [35.58198, 139.64164], [35.58358, 139.64164], [35.58358, 139.63967], [35.58679, 139.63967], [35.58679, 139.64164], [35.5884, 139.64164], [35.5884, 139.64361], [35.59, 139.64361], [35.59, 139.64164], [35.5916, 139.64164], [35.5916, 139.63967], [35.59321, 139.63967], [35.59321, 139.6377], [35.59802, 139.6377], [35.59802, 139.63967], [35.59963, 139.63967], [35.59963, 139.64164], [35.60123, 139.64164], [35.60123, 139.64951], [35.60284, 139.64951], [35.60284, 139.65148], [35.60444, 139.65148], [35.60444, 139.65344], [35.60605, 139.65344], [35.60605, 139.65541], [35.61086, 139.65541], [35.61086, 139.65934], [35.61247, 139.65934], [35.61247, 139.66328], [35.61086, 139.66328], [35.61086, 139.66525], [35.60926, 139.66525], [35.60926, 139.67115], [35.61086, 139.67115], [35.61086, 139.67508], [35.61247, 139.67508], [35.61247, 139.67705], [35.61407, 139.67705], [35.61407, 139.68689], [35.61568, 139.68689], [35.61568, 139.68885], [35.61728, 139.68885], [35.61728, 139.69082], [35.6221, 139.69082], [35.6221, 139.68885], [35.63012, 139.68885], [35.63012, 139.69082], [35.63173, 139.69082], [35.63173, 139.69279], [35.63333, 139.69279], [35.63333, 139.69082], [35.63494, 139.69082], [35.63494, 139.68885], [35.63654, 139.68885], [35.63654, 139.68492], [35.64136, 139.68492], [35.64136, 139.68689], [35.64296, 139.68689], [35.64296, 139.68885], [35.64457, 139.68885], [35.64457, 139.69082], [35.64778, 139.69082], [35.64778, 139.68885], [35.64938, 139.68885], [35.64938, 139.69279], [35.65099, 139.69279], [35.65099, 139.69475], [35.65259, 139.69475], [35.65259, 139.69672], [35.6542, 139.69672], [35.6542, 139.69869], [35.6558, 139.69869], [35.6558, 139.70066], [35.65741, 139.70066], [35.65741, 139.70262], [35.65901, 139.70262], [35.65901, 139.70656], [35.65741, 139.70656], [35.65741, 139.70852], [35.6558, 139.70852], [35.6558, 139.71049], [35.6542, 139.71049], [35.6542, 139.71246], [35.65259, 139.71246], [35.65259, 139.71836], [35.65099, 139.71836], [35.65099, 139.73016], [35.64938, 139.73016], [35.64938, 139.7341], [35.65099, 139.7341], [35.65099, 139.73803], [35.64778, 139.73803], [35.64778, 139.74], [35.64617, 139.74], [35.64617, 139.74197], [35.64457, 139.74197], [35.64457, 139.74], [35.63975, 139.74], [35.63975, 139.74197], [35.63815, 139.74197], [35.63815, 139.74393], [35.63654, 139.74393], [35.63654, 139.74787], [35.63333, 139.74787], [35.63333, 139.74984], [35.62852, 139.74984], [35.62852, 139.7518], [35.62691, 139.7518], [35.62691, 139.74984], [35.6237, 139.74984], [35.6237, 139.7518], [35.62049, 139.7518], [35.62049, 139.75377], [35.61728, 139.75377], [35.61728, 139.75574], [35.61407, 139.75574], [35.61407, 139.7577], [35.61086, 139.7577], [35.61086, 139.75967], [35.60765, 139.75967], [35.60765, 139.76164], [35.60605, 139.76164], [35.60605, 139.76361], [35.60284, 139.76361], [35.60284, 139.76557], [35.59963, 139.76557], [35.59963, 139.76754], [35.59642, 139.76754], [35.59642, 139.76557], [35.59481, 139.76557], [35.59481, 139.76754], [35.59321, 139.76754], [35.59321, 139.76951], [35.5916, 139.76951], [35.5916, 139.77148], [35.59321, 139.77148], [35.59321, 139.77458], [35.59211, 139.77541], [35.5916, 139.77541], [35.5916, 139.77579], [35.59028, 139.77678], [35.58752, 139.77377], [35.58761, 139.77358], [35.58726, 139.7732], [35.5872, 139.77328], [35.58713, 139.77311], [35.58692, 139.77317], [35.58513, 139.77556], [35.58554, 139.77613], [35.58583, 139.77633], [35.58521, 139.77717], [35.58647, 139.77854], [35.58707, 139.77771], [35.58716, 139.77781], [35.58503, 139.78074], [35.58573, 139.78143], [35.58558, 139.78163], [35.5849, 139.7809], [35.58372, 139.78255], [35.58404, 139.7829], [35.58373, 139.78333], [35.58341, 139.78298], [35.58046, 139.78703], [35.58038, 139.78695], [35.58006, 139.7874], [35.57902, 139.78725], [35.57963, 139.78728], [35.57968, 139.78676], [35.57907, 139.78594], [35.57828, 139.78519], [35.57757, 139.78476], [35.57738, 139.78489], [35.57734, 139.78526], [35.57739, 139.7837], [35.5771, 139.78338], [35.57488, 139.77352], [35.57459, 139.77366], [35.56489, 139.76561], [35.56842, 139.75841], [35.56853, 139.75602], [35.56736, 139.75023], [35.56679, 139.74942], [35.56487, 139.75108], [35.5651, 139.75142], [35.5634, 139.75295], [35.56321, 139.75268], [35.56224, 139.75342], [35.56163, 139.75418], [35.56178, 139.75475], [35.56156, 139.75492], [35.56158, 139.75526], [35.56274, 139.75565], [35.56436, 139.75859], [35.56316, 139.76102], [35.5607, 139.76309], [35.56045, 139.76379], [35.56897, 139.77102], [35.57054, 139.78543], [35.56991, 139.78588], [35.5698, 139.78612], [35.5699, 139.78645], [35.56976, 139.78637], [35.56889, 139.78661], [35.56788, 139.78721], [35.5676, 139.78756], [35.56774, 139.78792], [35.56756, 139.78768], [35.5671, 139.78776], [35.56533, 139.78901], [35.56514, 139.78939], [35.56519, 139.78964], [35.56392, 139.79015], [35.56296, 139.79082], [35.56278, 139.79112], [35.56285, 139.7914], [35.56265, 139.79133], [35.56132, 139.79196], [35.56037, 139.79261], [35.56047, 139.79282], [35.56007, 139.79309], [35.55951, 139.79311], [35.55951, 139.79335], [35.55821, 139.7942], [35.5581, 139.79439], [35.55821, 139.79463], [35.55809, 139.79452], [35.55781, 139.79459], [35.55699, 139.79508], [35.5563, 139.79508], [35.5563, 139.79552], [35.55579, 139.79605], [35.55589, 139.79634], [35.55573, 139.7962], [35.55549, 139.79625], [35.55465, 139.79675], [35.55371, 139.7974], [35.55346, 139.7977], [35.55347, 139.79798], [35.55333, 139.79775], [35.55281, 139.79801], [35.55128, 139.79914], [35.55117, 139.79957], [35.55083, 139.79942], [35.54915, 139.80062], [35.54884, 139.80103], [35.54883, 139.80125], [35.54868, 139.80113], [35.54846, 139.80118], [35.54686, 139.80295], [35.54667, 139.80295], [35.54667, 139.80318], [35.54603, 139.80396], [35.54069, 139.80774], [35.54037, 139.80842], [35.53913, 139.80916], [35.53857, 139.80911], [35.53773, 139.80766], [35.53761, 139.80731], [35.53759, 139.80638], [35.53611, 139.80324], [35.53597, 139.80322], [35.53486, 139.80089], [35.53492, 139.80073], [35.53214, 139.7949], [35.51858, 139.79626], [35.51761, 139.79551], [35.51737, 139.79619], [35.51662, 139.79576], [35.51694, 139.7949], [35.51338, 139.79157], [35.51069, 139.79609], [35.51171, 139.79428], [35.51141, 139.79388], [35.50868, 139.79154], [35.50828, 139.79192], [35.5076, 139.79389], [35.50742, 139.79503], [35.50744, 139.79621], [35.50805, 139.79677], [35.50787, 139.7973], [35.50848, 139.79769], [35.50926, 139.79843], [35.51032, 139.79671], [35.50918, 139.79867], [35.50668, 139.79647], [35.50713, 139.79191], [35.51325, 139.78019], [35.50955, 139.77623], [35.51231, 139.77231], [35.51479, 139.77471], [35.51563, 139.77353], [35.51322, 139.77103], [35.51163, 139.76498], [35.50598, 139.76647], [35.50622, 139.77119], [35.50602, 139.77121], [35.50503, 139.77712], [35.50516, 139.7758], [35.50492, 139.77563], [35.50411, 139.77572], [35.50381, 139.77599], [35.50453, 139.77744], [35.50494, 139.77734], [35.50251, 139.78328], [35.50243, 139.78328], [35.50445, 139.77834], [35.50345, 139.77609], [35.50012, 139.77831]]
 };
 
-const DISTRICT_COLORS: Record<string, string> = {
-  A: '#ef4444',
-  E: '#22c55e',
-  W: '#f97316',
-  X: '#eab308',
-  Z: '#38bdf8'
+const RESOURCE_EMOJIS: Record<string, string> = {
+  MEDICAL: '⚕️',
+  RESCUE: '🚑',
+  TRANSPORT: '🚚',
+  SHELTERS: '🏕️',
+  FOOD_WATER: '💧',
+  COMMUNICATION: '📡',
+  POWER: '⚡',
+  ENGINEERING: '🚜',
+  SECURITY: '🛡️',
+  HAZMAT: '☢️'
 };
 
 const DEFAULT_CENTER: L.LatLngTuple = [35.6720, 139.7450];
@@ -42,16 +44,13 @@ type LatLngRing = [number, number][];
   imports: [CommonModule],
   template: `
     <div class="relative w-full h-full bg-black overflow-hidden select-none font-mono">
-      <div #mapContainer class="w-full h-full z-0"></div>
+      <div #mapContainer class="w-full h-full z-0 bg-neutral-900"></div>
 
-      <div *ngIf="activeDisaster"
+      <div *ngIf="context.disasters().length > 0"
            class="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100%-8rem)] px-4 py-1.5 bg-black/95 border border-red-600 border-t-2 border-t-red-500 text-red-400 font-mono text-xs flex items-center gap-3 shadow-2xl animate-pulse">
         <span class="w-2 h-2 bg-red-500 animate-ping"></span>
-        <span class="font-bold tracking-widest uppercase">
-          ALERTE CATASTROPHE : {{ activeDisaster.disaster_type }} // {{ getDistrictName(activeDisaster.district_id) }} [NIVEAU {{ activeDisaster.calculated_level }}]
-        </span>
-        <span class="px-1.5 py-0.2 bg-red-950 border border-red-800 text-red-300 text-[10px]">
-          INTENSITE {{ activeDisaster.intensity }}/100
+        <span *ngFor="let disaster of context.disasters()" class="font-bold tracking-widest uppercase">
+          {{ disasterLabels[disaster.disaster_type] }} — {{ districtName(disaster.district_code) }} [NIVEAU {{ disaster.level }}]
         </span>
       </div>
 
@@ -62,7 +61,7 @@ type LatLngRing = [number, number][];
 
         <button *ngFor="let layer of tacticalLayers"
                 (click)="setLayer(layer.id)"
-                [title]="layer.label + ' - ' + layer.sublabel"
+                [title]="layer.label"
                 class="w-8 h-8 flex items-center justify-center border transition-all text-xs"
                 [ngClass]="context.activeTacticalLayer() === layer.id 
                   ? 'border-green-500 bg-green-500 text-black' 
@@ -74,10 +73,10 @@ type LatLngRing = [number, number][];
           <svg *ngIf="layer.id === 'POWER'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
-          <svg *ngIf="layer.id === 'WATER'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg *ngIf="layer.id === 'SUPPLIES'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
           </svg>
-          <svg *ngIf="layer.id === 'FOOD'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg *ngIf="layer.id === 'SHELTER'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
             <line x1="12" y1="22.08" x2="12" y2="12"/>
@@ -87,25 +86,34 @@ type LatLngRing = [number, number][];
             <line x1="12" y1="8" x2="12" y2="16"/>
             <line x1="8" y1="12" x2="16" y2="12"/>
           </svg>
-          <svg *ngIf="layer.id === 'HEAVY_GEAR'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg *ngIf="layer.id === 'LOGISTICS'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
         </button>
       </div>
 
       <div class="absolute bottom-3 left-3 z-30 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-15rem)] px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] text-zinc-400 flex items-center gap-2">
-        <span class="shrink-0 text-green-500 font-bold">[CALQUE: {{ getCurrentLayerConfig().tag }}]</span>
-        <span class="shrink-0 uppercase tracking-wider text-zinc-300">{{ getCurrentLayerConfig().label }}</span>
-        <span class="shrink-0 text-zinc-600">//</span>
-        <span class="min-w-0 truncate">{{ getLayerLiveMetrics() }}</span>
+        <span class="shrink-0 text-green-500 font-bold">[{{ currentLayer().tag }}]</span>
+        <span class="shrink-0 uppercase tracking-wider text-zinc-300">{{ currentLayer().label }}</span>
+        <span class="shrink-0 text-zinc-600">·</span>
+        <span class="min-w-0 truncate">{{ layerMetrics() }}</span>
       </div>
 
-      <div class="hidden sm:flex absolute bottom-3 right-3 z-30 flex-col gap-0.5 px-2.5 py-1.5 bg-black/80 border border-zinc-800 text-[9px] uppercase tracking-widest text-zinc-500 pointer-events-none">
-        <div><span class="text-zinc-300 font-bold">[GLISSER]</span> DEPLACER</div>
-        <div><span class="text-zinc-300 font-bold">[ZQSD / FLECHES]</span> PANORAMIQUE</div>
-        <div><span class="text-zinc-300 font-bold">[MAJ]</span> RAPIDE</div>
-        <div><span class="text-zinc-300 font-bold">[MOLETTE / + -]</span> ZOOM</div>
-        <div><span class="text-zinc-300 font-bold">[ESPACE]</span> RECENTRER</div>
+      <div class="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-1.5">
+        <div class="px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] space-y-0.5">
+          <div *ngFor="let level of [1, 2, 3, 4, 5]" class="flex items-center gap-2">
+            <span class="w-3 h-3" [style.background-color]="levelColors[level]"></span>
+            <span class="text-zinc-300">{{ level }} · {{ levelLabels[level] }}</span>
+          </div>
+        </div>
+
+        <div class="hidden sm:flex flex-col gap-0.5 px-2.5 py-1.5 bg-black/80 border border-zinc-800 text-[9px] uppercase tracking-widest text-zinc-500 pointer-events-none">
+          <div><span class="text-zinc-300 font-bold">[GLISSER]</span> DEPLACER</div>
+          <div><span class="text-zinc-300 font-bold">[ZQSD / FLECHES]</span> PANORAMIQUE</div>
+          <div><span class="text-zinc-300 font-bold">[MAJ]</span> RAPIDE</div>
+          <div><span class="text-zinc-300 font-bold">[MOLETTE / + -]</span> ZOOM</div>
+          <div><span class="text-zinc-300 font-bold">[ESPACE]</span> RECENTRER</div>
+        </div>
       </div>
     </div>
   `,
@@ -123,12 +131,37 @@ export class MapComponent implements OnInit, OnDestroy {
   @ViewChild('mapContainer', { static: true }) mapContainer!: ElementRef;
 
   context = inject(CrisisContextService);
-  private api = inject(KaijuApiService);
-  private ws = inject(KaijuWsService);
   private zone = inject(NgZone);
   private host = inject(ElementRef);
 
-  tacticalLayers = TACTICAL_LAYERS;
+  readonly tacticalLayers = TACTICAL_LAYERS;
+  readonly levelColors = LEVEL_COLORS;
+  readonly levelLabels = LEVEL_LABELS;
+  readonly disasterLabels: Record<DisasterType, string> = {
+    EARTHQUAKE: 'Séisme',
+    TSUNAMI: 'Tsunami',
+    TORNADO: 'Tornade'
+  };
+
+  readonly currentLayer = computed(
+    () => this.tacticalLayers.find((l) => l.id === this.context.activeTacticalLayer()) ?? this.tacticalLayers[0]
+  );
+
+  readonly layerMetrics = computed(() => {
+    const codes = this.currentLayer().resourceCodes;
+    if (codes.length === 0) {
+      const convoys = this.context.transfers().filter((t) => t.status === 'IN_TRANSIT').length;
+      return `${convoys} convoi(s) en route dans Tokyork`;
+    }
+    return codes
+      .map((code) => {
+        const stocks = this.context.stocks().filter((s) => s.resource_code === code);
+        const total = stocks.reduce((sum, s) => sum + s.current_quantity, 0);
+        return `${total} × ${stocks[0]?.resource_name ?? code}`;
+      })
+      .join(' | ');
+  });
+
   private map!: L.Map;
   private districtLayers = new Map<string, L.Polygon>();
   private markerLayers = new Map<string, L.Marker>();
@@ -149,13 +182,6 @@ export class MapComponent implements OnInit, OnDestroy {
   private convoyAnimations: { marker: L.Marker; from: [number, number]; to: [number, number]; duration: number; phase: number }[] = [];
   private convoyAnimationRAF: number | null = null;
 
-  districts: District[] = [];
-  inventory: DistrictResourceDetail[] = [];
-  transfers: TransferRequestDetail[] = [];
-  activeDisaster: DisasterEvent | null = null;
-
-  private subs = new Subscription();
-
   private focusInitialized = false;
   private lastFocusedCode: string | null = null;
   private pendingFocus = false;
@@ -174,17 +200,22 @@ export class MapComponent implements OnInit, OnDestroy {
       const code = this.context.selectedDistrictCode();
       untracked(() => this.onSelectionChange(code));
     });
+    effect(() => {
+      this.context.districts();
+      this.context.stocks();
+      this.context.transfers();
+      this.context.activeTacticalLayer();
+      untracked(() => this.renderAllMapLayers());
+    });
   }
 
   ngOnInit(): void {
     this.initMap();
     this.initNavigation();
-    this.loadData();
-    this.listenToEvents();
+    this.renderAllMapLayers();
   }
 
   ngOnDestroy(): void {
-    this.subs.unsubscribe();
     if (this.convoyAnimationRAF !== null) {
       cancelAnimationFrame(this.convoyAnimationRAF);
     }
@@ -195,66 +226,11 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   setLayer(layer: TacticalLayer): void {
-    this.context.setTacticalLayer(layer);
-    this.renderAllMapLayers();
+    this.context.activeTacticalLayer.set(layer);
   }
 
-  getCurrentLayerConfig() {
-    return this.tacticalLayers.find((l) => l.id === this.context.activeTacticalLayer()) || this.tacticalLayers[0];
-  }
-
-  getDistrictName(id: string): string {
-    const d = this.districts.find((dist) => dist.id === id);
-    return d ? d.name.toUpperCase() : id.toUpperCase();
-  }
-
-  getLayerLiveMetrics(): string {
-    const layer = this.context.activeTacticalLayer();
-    const activeLevel = this.context.activeDisasterLevel();
-
-    switch (layer) {
-      case 'POWER':
-        const genCount = this.getTotalStock('GENERATOR');
-        const fuelL = this.getTotalStock('FUEL');
-        const gridStatus = activeLevel >= 4 ? 'RESEAU COMPROMIS (20kV COUPE)' : 'RESEAU SOUS-TERRAIN NOMINAL';
-        return `${gridStatus} | ${genCount} GENERATEURS | ${fuelL}L CARBURANT`;
-
-      case 'WATER':
-        const waterL = this.getTotalStock('WATER');
-        const purifiers = this.getTotalStock('WATER_PURIFIER');
-        return `AQUEDUCS ACTIFS | ${waterL}L EAU POTABLE | ${purifiers} STATIONS DE FILTRATION`;
-
-      case 'FOOD':
-        const foodRations = this.getTotalStock('FOOD');
-        const convoysFood = this.getConvoysForResource(['FOOD']);
-        return `${foodRations} RATIONS EN RESERVE | ${convoysFood} CONVOIS ALIMENTAIRES ACTIFS`;
-
-      case 'MEDICAL':
-        const medkits = this.getTotalStock('MED_KIT');
-        const medics = this.getTotalStock('MEDIC');
-        return `${medkits} KITS DE SECOURS | ${medics} BRIGADES DE MEDECINS`;
-
-      case 'HEAVY_GEAR':
-        const atvs = this.getTotalStock('ATV');
-        const clearing = this.getTotalStock('CLEARING_GEAR');
-        return `${atvs} VEHICULES TOUT-TERRAIN | ${clearing} ENGINS DE DEBLAIEMENT`;
-
-      default:
-        const totalConvoys = this.transfers.filter((t) => t.status === 'IN_TRANSIT').length;
-        return `RADAR ACTIF // ${totalConvoys} CONVOIS TACTIQUES EN TRANSIT DANS TOKYORK`;
-    }
-  }
-
-  private getTotalStock(resourceCode: string): number {
-    return this.inventory
-      .filter((i) => i.resource_code === resourceCode)
-      .reduce((sum, item) => sum + item.current_quantity, 0);
-  }
-
-  private getConvoysForResource(resourceCodes: string[]): number {
-    return this.transfers.filter(
-      (t) => t.status === 'IN_TRANSIT' && resourceCodes.includes(t.resource_code)
-    ).length;
+  districtName(code: string): string {
+    return this.context.districts().find((d) => d.code === code)?.name.toUpperCase() ?? code;
   }
 
   private initMap(): void {
@@ -286,6 +262,8 @@ export class MapComponent implements OnInit, OnDestroy {
       maxNativeZoom: 16,
       minNativeZoom: 11,
       minZoom: 10,
+      keepBuffer: 6,
+      updateWhenZooming: false,
     }).addTo(this.map);
 
     this.updateMinZoom();
@@ -351,7 +329,7 @@ export class MapComponent implements OnInit, OnDestroy {
     const point = e.originalEvent ? this.map.mouseEventToContainerPoint(e.originalEvent) : e.containerPoint;
     const code = this.findDistrictAt(point);
     if (code) {
-      this.context.selectDistrict(code);
+      this.context.selectedDistrictCode.set(code);
     }
   };
 
@@ -386,7 +364,8 @@ export class MapComponent implements OnInit, OnDestroy {
     if (!code || code === this.context.selectedDistrictCode()) return;
     const rings = this.districtShapes.get(code);
     if (!rings || rings.length === 0) return;
-    const color = DISTRICT_COLORS[code] || '#22c55e';
+    const district = this.context.districts().find((d) => d.code === code);
+    const color = district ? LEVEL_COLORS[district.disaster_level] : '#22c55e';
     this.hoverLayer = L.polygon(rings, {
       renderer: this.highlightRenderer,
       interactive: false,
@@ -660,8 +639,8 @@ export class MapComponent implements OnInit, OnDestroy {
     const clientY = containerRect.top + point.y;
     let markerHit: string | null = null;
     let markerHitDistance = Infinity;
-    for (const d of this.districts) {
-      const el = this.markerLayers.get(d.id)?.getElement();
+    for (const d of this.context.districts()) {
+      const el = this.markerLayers.get(d.code)?.getElement();
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
@@ -725,95 +704,8 @@ export class MapComponent implements OnInit, OnDestroy {
     return bounds.flatMap((ring) => this.toRings(ring));
   }
 
-  private loadData(): void {
-    this.api.getDistricts().subscribe({
-      next: (districts) => {
-        this.districts = districts;
-        this.renderDistricts();
-        this.renderRoutes();
-        this.renderInfrastructure();
-      },
-      error: () => {}
-    });
-
-    this.api.getInventory().subscribe({
-      next: (inv) => {
-        this.inventory = inv;
-        this.renderDistricts();
-      },
-      error: () => {}
-    });
-
-    this.api.getTransfers().subscribe({
-      next: (transfers) => {
-        this.transfers = transfers;
-        this.renderConvoys();
-      },
-      error: () => {}
-    });
-
-    this.api.getActiveDisaster().subscribe({
-      next: (res) => {
-        this.activeDisaster = res.active_disaster;
-        if (this.activeDisaster) {
-          this.context.setDisasterLevel(this.activeDisaster.calculated_level);
-        }
-        this.renderDistricts();
-      },
-      error: () => {}
-    });
-  }
-
-  private listenToEvents(): void {
-    this.subs.add(
-      this.ws.disasterChanges$.subscribe((payload) => {
-        if (payload && payload.level) {
-          this.activeDisaster = {
-            id: payload.disaster_id,
-            district_id: payload.district_id,
-            disaster_type: payload.disaster_type,
-            intensity: payload.intensity || 50,
-            calculated_level: payload.level,
-            is_active: true,
-            triggered_by: 'WS',
-            triggered_at: new Date().toISOString()
-          };
-          this.context.setDisasterLevel(payload.level);
-        } else {
-          this.activeDisaster = null;
-          this.context.setDisasterLevel(1);
-        }
-        this.reloadAndRerender();
-      })
-    );
-
-    this.subs.add(
-      this.ws.resourceUpdates$.subscribe(() => {
-        this.api.getInventory().subscribe((inv) => {
-          this.inventory = inv;
-          this.renderAllMapLayers();
-        });
-      })
-    );
-
-    this.subs.add(
-      this.ws.transferUpdates$.subscribe(() => {
-        this.api.getTransfers().subscribe((t) => {
-          this.transfers = t;
-          this.renderAllMapLayers();
-        });
-      })
-    );
-  }
-
-  private reloadAndRerender(): void {
-    this.api.getDistricts().subscribe((d) => {
-      this.districts = d;
-      this.renderAllMapLayers();
-    });
-  }
-
   private renderAllMapLayers(): void {
+    if (!this.map) return;
     this.renderDistricts();
     this.renderRoutes();
     this.renderInfrastructure();
@@ -821,25 +713,18 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   private renderDistricts(): void {
-    this.districts.forEach((d) => {
-      let bounds: [number, number][] = TOKYORK_POLYGONS[d.code] || [];
-      try {
-        const parsed = JSON.parse(d.polygon_bounds_json);
-        if (Array.isArray(parsed) && parsed.length >= 10) {
-          bounds = parsed;
-        }
-      } catch {}
-
+    this.context.districts().forEach((d) => {
+      const bounds: [number, number][] = TOKYORK_POLYGONS[d.code] || [];
       if (bounds.length === 0) return;
 
       this.districtShapes.set(d.code, this.toRings(bounds));
       this.districtAnchors.set(d.code, L.latLng(d.latitude, d.longitude));
 
-      let polygon = this.districtLayers.get(d.id);
+      let polygon = this.districtLayers.get(d.code);
       if (!polygon) {
         polygon = L.polygon(bounds, { ...this.getDistrictStyle(d), interactive: false });
         polygon.addTo(this.map);
-        this.districtLayers.set(d.id, polygon);
+        this.districtLayers.set(d.code, polygon);
       } else {
         polygon.setLatLngs(bounds);
         polygon.setStyle(this.getDistrictStyle(d));
@@ -853,11 +738,11 @@ export class MapComponent implements OnInit, OnDestroy {
         iconAnchor: [65, 21],
       });
 
-      let marker = this.markerLayers.get(d.id);
+      let marker = this.markerLayers.get(d.code);
       if (!marker) {
         marker = L.marker([d.latitude, d.longitude], { icon: customIcon, interactive: false, keyboard: false });
         marker.addTo(this.map);
-        this.markerLayers.set(d.id, marker);
+        this.markerLayers.set(d.code, marker);
       } else {
         marker.setLatLng([d.latitude, d.longitude]);
         marker.setIcon(customIcon);
@@ -872,45 +757,31 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   private buildDistrictMarkerHtml(d: District): string {
-    const isTarget = this.activeDisaster?.district_id === d.id;
-    const baseColor = DISTRICT_COLORS[d.code] || '#22c55e';
-    const borderColor = isTarget ? '#ef4444' : baseColor;
+    const color = LEVEL_COLORS[d.disaster_level];
+    const pulsing = d.disaster_level >= 4;
 
     return `
       <div class="flex flex-col items-center justify-center font-mono cursor-pointer select-none">
-        <div class="border bg-black/95 px-2.5 py-1 text-center shadow-2xl backdrop-blur-sm" style="border-color: ${borderColor}">
+        <div class="border bg-black/95 px-2.5 py-1 text-center shadow-2xl backdrop-blur-sm" style="border-color: ${color}">
           <div class="flex items-center justify-center gap-1.5">
-            <span class="w-2 h-2 ${isTarget ? 'bg-red-500 animate-ping' : ''}" style="background-color: ${baseColor}"></span>
+            <span class="w-2 h-2 ${pulsing ? 'animate-ping' : ''}" style="background-color: ${color}"></span>
             <span class="text-xs font-black tracking-widest text-white">[ ${d.code} ]</span>
-            <span class="text-[9px] text-zinc-400 font-bold uppercase">${d.is_coastal ? 'COAST' : 'INLAND'}</span>
+            <span class="text-[9px] font-bold uppercase" style="color: ${color}">NIV ${d.disaster_level}</span>
           </div>
-          <div class="text-[9px] text-zinc-300 font-bold tracking-tight uppercase truncate max-w-[115px] border-t border-zinc-800 mt-0.5 pt-0.5">${d.name.split(' (')[0]}</div>
+          <div class="text-[9px] text-zinc-300 font-bold tracking-tight uppercase truncate max-w-[115px] border-t border-zinc-800 mt-0.5 pt-0.5">${d.name} · ${d.is_coastal ? 'BAIE' : 'ENCLAVE'}</div>
         </div>
       </div>
     `;
   }
 
   private getDistrictStyle(d: District): L.PathOptions {
-    const isAffected = this.activeDisaster?.district_id === d.id;
-    const color = DISTRICT_COLORS[d.code] || '#22c55e';
-
-    if (isAffected) {
-      return {
-        color: '#ef4444',
-        weight: 3,
-        opacity: 1,
-        fillColor: '#ef4444',
-        fillOpacity: 0.18,
-        dashArray: '4, 4'
-      };
-    }
-
+    const color = LEVEL_COLORS[d.disaster_level];
     return {
-      color: color,
-      weight: 2,
+      color,
+      weight: d.disaster_level >= 4 ? 3 : 2,
       opacity: 0.95,
       fillColor: color,
-      fillOpacity: 0.1,
+      fillOpacity: 0.04 + 0.06 * d.disaster_level,
       dashArray: '4, 4'
     };
   }
@@ -930,9 +801,10 @@ export class MapComponent implements OnInit, OnDestroy {
       ['E', 'Z', 'SEA'],
     ];
 
+    const districts = this.context.districts();
     connections.forEach(([c1, c2, mode]) => {
-      const d1 = this.districts.find((d) => d.code === c1);
-      const d2 = this.districts.find((d) => d.code === c2);
+      const d1 = districts.find((d) => d.code === c1);
+      const d2 = districts.find((d) => d.code === c2);
       if (!d1 || !d2) return;
 
       const p1: [number, number] = [d1.latitude, d1.longitude];
@@ -961,7 +833,7 @@ export class MapComponent implements OnInit, OnDestroy {
   private renderInfrastructure(): void {
     this.infrastructureLayers.clearLayers();
     const layer = this.context.activeTacticalLayer();
-    const isLevelHigh = this.context.activeDisasterLevel() >= 4;
+    const districts = this.context.districts();
 
     if (layer === 'POWER' || layer === 'GLOBAL') {
       const powerGrid = [
@@ -972,11 +844,11 @@ export class MapComponent implements OnInit, OnDestroy {
       ];
 
       powerGrid.forEach(([from, to]) => {
-        const d1 = this.districts.find((d) => d.code === from);
-        const d2 = this.districts.find((d) => d.code === to);
+        const d1 = districts.find((d) => d.code === from);
+        const d2 = districts.find((d) => d.code === to);
         if (!d1 || !d2) return;
 
-        const isCableCut = isLevelHigh && (this.activeDisaster?.district_id === d1.id || this.activeDisaster?.district_id === d2.id);
+        const isCableCut = d1.disaster_level >= 4 || d2.disaster_level >= 4;
 
         const cable = L.polyline([[d1.latitude, d1.longitude], [d2.latitude, d2.longitude]], {
           color: isCableCut ? '#ef4444' : '#22c55e',
@@ -984,8 +856,8 @@ export class MapComponent implements OnInit, OnDestroy {
           className: isCableCut ? 'electric-cable-off' : 'electric-cable-on'
         });
 
-        const statusTag = isCableCut ? '[COUPE / 0kV]' : '[ACTIF / 20kV]';
-        cable.bindTooltip(`// LIGNE HT 20kV ${from}-${to} : ${statusTag}`, {
+        const statusTag = isCableCut ? '[Coupé / 0kV]' : '[Actif / 20kV]';
+        cable.bindTooltip(`Ligne HT 20kV ${from}-${to} : ${statusTag}`, {
           permanent: false,
           className: 'route-tooltip'
         });
@@ -994,7 +866,7 @@ export class MapComponent implements OnInit, OnDestroy {
       });
     }
 
-    if (layer === 'WATER' || layer === 'GLOBAL') {
+    if (layer === 'SUPPLIES' || layer === 'GLOBAL') {
       const aqueducts = [
         ['E', 'X'],
         ['X', 'A'],
@@ -1002,8 +874,8 @@ export class MapComponent implements OnInit, OnDestroy {
       ];
 
       aqueducts.forEach(([from, to]) => {
-        const d1 = this.districts.find((d) => d.code === from);
-        const d2 = this.districts.find((d) => d.code === to);
+        const d1 = districts.find((d) => d.code === from);
+        const d2 = districts.find((d) => d.code === to);
         if (!d1 || !d2) return;
 
         const pipe = L.polyline([[d1.latitude, d1.longitude], [d2.latitude, d2.longitude]], {
@@ -1012,7 +884,7 @@ export class MapComponent implements OnInit, OnDestroy {
           className: 'water-pipe-flow'
         });
 
-        pipe.bindTooltip(`// AQUEDUC MAJEUR ${from}-${to} : PRESSION NOMINALE`, {
+        pipe.bindTooltip(`Aqueduc majeur ${from}-${to} : Pression nominale`, {
           permanent: false,
           className: 'route-tooltip'
         });
@@ -1023,19 +895,7 @@ export class MapComponent implements OnInit, OnDestroy {
   }
 
   private getResourceEmoji(resourceCode: string): string {
-    const emojiByResource: Record<string, string> = {
-      GENERATOR: '⚡',
-      FUEL: '⚡',
-      WATER: '💧',
-      WATER_PURIFIER: '💧',
-      FOOD: '🍞',
-      MED_KIT: '⚕️',
-      MEDIC: '⚕️',
-      SHELTER: '🏕️',
-      ATV: '🚜',
-      CLEARING_GEAR: '🚜'
-    };
-    return emojiByResource[resourceCode] || '📦';
+    return RESOURCE_EMOJIS[resourceCode] || '📦';
   }
 
   private renderConvoys(): void {
@@ -1046,11 +906,15 @@ export class MapComponent implements OnInit, OnDestroy {
     }
     this.convoyAnimations = [];
 
-    const activeConvoys = this.transfers.filter((t) => t.status === 'IN_TRANSIT');
+    const districts = this.context.districts();
+    const layerCodes = this.currentLayer().resourceCodes;
+    const activeConvoys = this.context
+      .transfers()
+      .filter((t) => t.status === 'IN_TRANSIT' && (layerCodes.length === 0 || layerCodes.includes(t.resource_code)));
 
     activeConvoys.forEach((t) => {
-      const d1 = this.districts.find((d) => d.id === t.source_district_id);
-      const d2 = this.districts.find((d) => d.id === t.target_district_id);
+      const d1 = districts.find((d) => d.code === t.source_code);
+      const d2 = districts.find((d) => d.code === t.target_code);
       if (!d1 || !d2) return;
 
       const from: [number, number] = [d1.latitude, d1.longitude];

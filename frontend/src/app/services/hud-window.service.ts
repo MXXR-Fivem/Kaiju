@@ -26,6 +26,7 @@ interface WindowBlueprint {
   height: number;
   zIndex: number;
   accentColor: 'green' | 'amber' | 'red';
+  openByDefault?: boolean;
 }
 
 const STORAGE_KEY = 'kaiju_hud_windows_v2';
@@ -38,18 +39,19 @@ const MIN_WINDOW_HEIGHT = 180;
 
 const WINDOW_BLUEPRINTS: WindowBlueprint[] = [
   {
-    id: 'alerts',
-    title: 'RADAR // FLUX D\'ALERTES TACTIQUES',
+    id: 'dashboard',
+    title: 'TABLEAU DE BORD · PRIORITÉS DU RÔLE',
     offsetX: 16,
     y: 60,
-    width: 420,
-    height: 380,
-    zIndex: 34,
-    accentColor: 'amber'
+    width: 440,
+    height: 560,
+    zIndex: 29,
+    accentColor: 'green',
+    openByDefault: true
   },
   {
     id: 'transfers',
-    title: 'LOGISTIQUE // CONVOIS & DEMANDES DE TRANSFERT',
+    title: 'LOGISTIQUE · CONVOIS & TRANSFERTS',
     offsetX: 40,
     y: 80,
     width: 520,
@@ -59,7 +61,7 @@ const WINDOW_BLUEPRINTS: WindowBlueprint[] = [
   },
   {
     id: 'reservations',
-    title: 'ALLOCATION // RESERVATION LOCALE D\'URGENCE',
+    title: 'ALLOCATION · RÉSERVATIONS DU QUARTIER',
     offsetX: 70,
     y: 110,
     width: 480,
@@ -69,13 +71,23 @@ const WINDOW_BLUEPRINTS: WindowBlueprint[] = [
   },
   {
     id: 'calendar',
-    title: 'PLANIFICATION // CALENDRIER OPERATIONNEL DE CRISE',
+    title: 'PLANIFICATION · CALENDRIER OPÉRATIONNEL',
     offsetX: 100,
     y: 70,
     width: 600,
     height: 520,
     zIndex: 33,
     accentColor: 'green'
+  },
+  {
+    id: 'alerts',
+    title: 'ALERTES · FLUX DES URGENCES',
+    offsetX: 16,
+    y: 60,
+    width: 420,
+    height: 380,
+    zIndex: 34,
+    accentColor: 'amber'
   }
 ];
 
@@ -105,7 +117,7 @@ function buildDefaultWindows(): Record<string, WindowState> {
     result[bp.id] = {
       id: bp.id,
       title: bp.title,
-      isOpen: false,
+      isOpen: bp.openByDefault ?? false,
       isMinimized: false,
       x,
       y: bp.y,
@@ -284,7 +296,7 @@ export class HudWindowService {
         y: def.defaultY,
         width: def.defaultW,
         height: def.defaultH,
-        isOpen: false,
+        isOpen: def.isOpen,
         zIndex: 30
       };
     }

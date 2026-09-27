@@ -1,61 +1,48 @@
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use actix_ws::Message;
 use futures_util::StreamExt;
-use std::sync::Arc;
+use serde::Deserialize;
+
+use crate::auth::read_token;
 use crate::errors::AppError;
-use crate::ws::WsHub;
+use crate::state::AppState;
+
+#[derive(Deserialize)]
+pub struct WsQuery {
+    pub token: Option<String>,
+}
 
 #[get("/ws")]
-pub async fn websocket_route(
+pub async fn websocket(
     req: HttpRequest,
     body: web::Payload,
-    ws_hub: web::Data<Arc<WsHub>>,
+    query: web::Query<WsQuery>,
+    state: web::Data<AppState>,
 ) -> Result<HttpResponse, AppError> {
-    let (response, mut session, mut msg_stream) = match actix_ws::handle(&req, body) {
-        Ok(res) => res,
-        Err(e) => return Err(AppError::InternalError(format!("Echec handshake WebSocket : {}", e))),
-    };
-
-    let mut rx = ws_hub.subscribe();
+    read_token(query.token.as_deref().unwrap_or_default(), &state.jwt_secret)?;
+    let (response, mut session, mut messages) = actix_ws::handle(&req, body).map_err(|_| AppError::Internal)?;
+    let mut events = state.hub.subscribe();
 
     actix_web::rt::spawn(async move {
-        let welcome = serde_json::json!({
-            "type": "CONNECTED",
-            "payload": {
-                "message": "Connecte au reseau tactique KAIJU Tokyork (WebSocket actif)",
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }
-        });
-        let _ = session.text(welcome.to_string()).await;
-
         loop {
             tokio::select! {
-                Ok(broadcast_msg) = rx.recv() => {
-                    if session.text(broadcast_msg).await.is_err() {
+                Ok(event) = events.recv() => {
+                    if session.text(event).await.is_err() {
                         break;
                     }
                 }
-
-                Some(Ok(msg)) = msg_stream.next() => {
-                    match msg {
-                        Message::Ping(bytes) => {
-                            if session.pong(&bytes).await.is_err() {
-                                break;
-                            }
-                        }
-                        Message::Text(t) => {
-                            if t.trim() == "ping" {
-                                let _ = session.text(r#"{"type":"PONG"}"#).await;
-                            }
-                        }
-                        Message::Close(reason) => {
-                            let _ = session.close(reason).await;
+                Some(Ok(message)) = messages.next() => match message {
+                    Message::Ping(bytes) => {
+                        if session.pong(&bytes).await.is_err() {
                             break;
                         }
-                        _ => {}
                     }
-                }
-
+                    Message::Close(reason) => {
+                        let _ = session.close(reason).await;
+                        break;
+                    }
+                    _ => {}
+                },
                 else => break,
             }
         }

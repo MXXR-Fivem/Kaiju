@@ -8,6 +8,7 @@ import { HudWindowService, WindowState } from '../../services/hud-window.service
   imports: [CommonModule],
   template: `
     <div *ngIf="windowState?.isOpen"
+         [attr.data-testid]="'window-' + windowId"
          (mousedown)="bringToFront()"
          class="fixed bg-black/95 border border-zinc-700 hud-window-shadow flex flex-col select-none font-mono text-xs overflow-hidden"
          [ngClass]="getAccentBorderClass()"

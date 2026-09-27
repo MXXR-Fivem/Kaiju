@@ -1,111 +1,37 @@
-use sqlx::{Pool, Sqlite};
-use crate::domain::{District, DistrictAdjacency};
+use sqlx::{SqliteExecutor, SqlitePool};
+
+use crate::domain::{rules::Topology, District};
 use crate::errors::AppError;
 
-pub struct DistrictRepository {
-    pool: Pool<Sqlite>,
+const DISTRICT_SELECT: &str = "SELECT code, name, is_coastal, latitude, longitude, disaster_level FROM districts";
+
+pub async fn all(db: &SqlitePool) -> Result<Vec<District>, AppError> {
+    Ok(sqlx::query_as(&format!("{DISTRICT_SELECT} ORDER BY code")).fetch_all(db).await?)
 }
 
-impl DistrictRepository {
-    pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
-    }
-
-    pub async fn find_all(&self) -> Result<Vec<District>, AppError> {
-        let districts = sqlx::query_as::<_, District>(
-            r#"
-            SELECT id, code, name, is_coastal, latitude, longitude, polygon_bounds_json, current_disaster_level
-            FROM districts
-            ORDER BY code ASC
-            "#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(districts)
-    }
-
-    pub async fn find_by_id(&self, id: &str) -> Result<Option<District>, AppError> {
-        let district = sqlx::query_as::<_, District>(
-            r#"
-            SELECT id, code, name, is_coastal, latitude, longitude, polygon_bounds_json, current_disaster_level
-            FROM districts
-            WHERE id = $1
-            "#
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(district)
-    }
-
-    pub async fn find_by_code(&self, code: &str) -> Result<Option<District>, AppError> {
-        let district = sqlx::query_as::<_, District>(
-            r#"
-            SELECT id, code, name, is_coastal, latitude, longitude, polygon_bounds_json, current_disaster_level
-            FROM districts
-            WHERE code = $1
-            "#
-        )
+pub async fn find(db: &SqlitePool, code: &str) -> Result<District, AppError> {
+    sqlx::query_as(&format!("{DISTRICT_SELECT} WHERE code = ?"))
         .bind(code)
-        .fetch_optional(&self.pool)
-        .await?;
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Quartier {code} introuvable.")))
+}
 
-        Ok(district)
-    }
+pub async fn city_level(db: &SqlitePool) -> Result<i64, AppError> {
+    Ok(sqlx::query_scalar("SELECT COALESCE(MAX(disaster_level), 1) FROM districts").fetch_one(db).await?)
+}
 
-    #[allow(dead_code)]
-    pub async fn update_disaster_level(&self, district_id: &str, level: i64) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            UPDATE districts
-            SET current_disaster_level = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2
-            "#
-        )
+pub async fn set_level<'e>(db: impl SqliteExecutor<'e>, code: &str, level: i64) -> Result<(), AppError> {
+    sqlx::query("UPDATE districts SET disaster_level = ? WHERE code = ?")
         .bind(level)
-        .bind(district_id)
-        .execute(&self.pool)
+        .bind(code)
+        .execute(db)
         .await?;
+    Ok(())
+}
 
-        Ok(())
-    }
-
-    pub async fn find_adjacencies(&self, from_id: &str) -> Result<Vec<DistrictAdjacency>, AppError> {
-        let adjacencies = sqlx::query_as::<_, DistrictAdjacency>(
-            r#"
-            SELECT id, from_district_id, to_district_id, route_type, base_transit_minutes, is_blocked
-            FROM district_adjacencies
-            WHERE from_district_id = $1 AND is_blocked = 0
-            "#
-        )
-        .bind(from_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(adjacencies)
-    }
-
-    pub async fn find_adjacency_between(
-        &self,
-        from_id: &str,
-        to_id: &str,
-        route_type: &str,
-    ) -> Result<Option<DistrictAdjacency>, AppError> {
-        let adjacency = sqlx::query_as::<_, DistrictAdjacency>(
-            r#"
-            SELECT id, from_district_id, to_district_id, route_type, base_transit_minutes, is_blocked
-            FROM district_adjacencies
-            WHERE from_district_id = $1 AND to_district_id = $2 AND route_type = $3
-            "#
-        )
-        .bind(from_id)
-        .bind(to_id)
-        .bind(route_type)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(adjacency)
-    }
+pub async fn topology(db: &SqlitePool) -> Result<Topology, AppError> {
+    let adjacencies = sqlx::query_as("SELECT district_code, neighbor_code FROM adjacencies").fetch_all(db).await?;
+    let coastal = sqlx::query_scalar("SELECT code FROM districts WHERE is_coastal").fetch_all(db).await?;
+    Ok(Topology::new(adjacencies, coastal))
 }

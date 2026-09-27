@@ -1,74 +1,47 @@
 use actix_web::{get, post, web, HttpResponse};
 use serde::Deserialize;
-use std::sync::Arc;
+
+use crate::auth::AuthUser;
+use crate::domain::NewTransfer;
 use crate::errors::AppError;
-use crate::service::TransferService;
+use crate::repository::transfer_repo;
+use crate::service::transfer_service;
+use crate::state::AppState;
 
 #[derive(Deserialize)]
-pub struct CreateTransferRequestDto {
-    pub requester_id: String,
-    pub source_district: String,
-    pub target_district: String,
-    pub resource_code: String,
-    pub quantity: i64,
-    #[serde(default = "default_route")]
-    pub route_type: String,
-}
-
-fn default_route() -> String {
-    "LAND".to_string()
-}
-
-#[derive(Deserialize)]
-pub struct ReviewTransitDto {
-    pub approver_role: String,
+pub struct Review {
     pub approved: bool,
 }
 
 #[get("/api/transfers")]
-pub async fn list_transfers(
-    service: web::Data<Arc<TransferService>>,
-) -> Result<HttpResponse, AppError> {
-    let list = service.list_transfers().await?;
-    Ok(HttpResponse::Ok().json(list))
+pub async fn transfers(state: web::Data<AppState>, _user: AuthUser) -> Result<HttpResponse, AppError> {
+    Ok(HttpResponse::Ok().json(transfer_repo::all(&state.db).await?))
 }
 
 #[post("/api/transfers")]
-pub async fn create_transfer(
-    body: web::Json<CreateTransferRequestDto>,
-    service: web::Data<Arc<TransferService>>,
+pub async fn create(
+    state: web::Data<AppState>,
+    user: AuthUser,
+    body: web::Json<NewTransfer>,
 ) -> Result<HttpResponse, AppError> {
-    let req = body.into_inner();
-    let transfer = service.request_transfer(
-        &req.requester_id,
-        &req.source_district,
-        &req.target_district,
-        &req.resource_code,
-        req.quantity,
-        &req.route_type.to_uppercase(),
-    ).await?;
-
-    Ok(HttpResponse::Created().json(transfer))
+    Ok(HttpResponse::Created().json(transfer_service::create(&state, &user, body.into_inner()).await?))
 }
 
-#[post("/api/transfers/{id}/transit")]
-pub async fn review_transit(
+#[post("/api/transfers/{id}/review")]
+pub async fn review(
+    state: web::Data<AppState>,
+    user: AuthUser,
     path: web::Path<String>,
-    body: web::Json<ReviewTransitDto>,
-    service: web::Data<Arc<TransferService>>,
+    body: web::Json<Review>,
 ) -> Result<HttpResponse, AppError> {
-    let id = path.into_inner();
-    let req = body.into_inner();
-    let updated = service.review_transit(&id, &req.approver_role, req.approved).await?;
-    Ok(HttpResponse::Ok().json(updated))
+    Ok(HttpResponse::Ok().json(transfer_service::review(&state, &user, &path, body.approved).await?))
 }
 
 #[post("/api/transfers/{id}/deliver")]
-pub async fn complete_delivery(
+pub async fn deliver(
+    state: web::Data<AppState>,
+    user: AuthUser,
     path: web::Path<String>,
-    service: web::Data<Arc<TransferService>>,
 ) -> Result<HttpResponse, AppError> {
-    let id = path.into_inner();
-    let updated = service.complete_delivery(&id).await?;
-    Ok(HttpResponse::Ok().json(updated))
+    Ok(HttpResponse::Ok().json(transfer_service::deliver(&state, &user, &path).await?))
 }

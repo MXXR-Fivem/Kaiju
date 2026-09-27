@@ -1,184 +1,89 @@
-use chrono::Utc;
-use sqlx::{Pool, Sqlite};
-use crate::domain::{TransferRequest, TransferRequestDetail};
+use sqlx::{SqliteExecutor, SqlitePool};
+
+use crate::domain::{Transfer, TransferStatus};
 use crate::errors::AppError;
 
-pub struct TransferRepository {
-    pool: Pool<Sqlite>,
+const TRANSFER_SELECT: &str = "SELECT t.id, t.requester_id, u.username AS requester_name, t.source_code, t.target_code,
+    t.transit_code, t.resource_code, r.name AS resource_name, t.quantity, t.route, t.is_requisition, t.source_approved,
+    t.transit_approved, t.status, t.duration_minutes, t.created_at, t.departed_at, t.arrival_at, t.delivered_at
+    FROM transfers t
+    JOIN users u ON u.id = t.requester_id
+    JOIN resource_types r ON r.code = t.resource_code";
+
+pub async fn all(db: &SqlitePool) -> Result<Vec<Transfer>, AppError> {
+    Ok(sqlx::query_as(&format!("{TRANSFER_SELECT} ORDER BY t.created_at DESC")).fetch_all(db).await?)
 }
 
-impl TransferRepository {
-    pub fn new(pool: Pool<Sqlite>) -> Self {
-        Self { pool }
-    }
-
-    pub async fn create(
-        &self,
-        id: &str,
-        requester_id: &str,
-        source_district_id: &str,
-        target_district_id: &str,
-        resource_type_id: &str,
-        quantity: i64,
-        route_type: &str,
-        transit_district_id: Option<&str>,
-        status: &str,
-        transit_approval_status: &str,
-        estimated_duration_minutes: i64,
-    ) -> Result<TransferRequest, AppError> {
-        let now = Utc::now();
-        let estimated_arrival = now + chrono::Duration::minutes(estimated_duration_minutes);
-
-        sqlx::query(
-            r#"
-            INSERT INTO transfer_requests (
-                id, requester_id, source_district_id, target_district_id,
-                resource_type_id, quantity, route_type, transit_district_id,
-                status, transit_approval_status, estimated_duration_minutes,
-                departed_at, estimated_arrival_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            "#
-        )
+pub async fn find(db: &SqlitePool, id: &str) -> Result<Transfer, AppError> {
+    sqlx::query_as(&format!("{TRANSFER_SELECT} WHERE t.id = ?"))
         .bind(id)
-        .bind(requester_id)
-        .bind(source_district_id)
-        .bind(target_district_id)
-        .bind(resource_type_id)
-        .bind(quantity)
-        .bind(route_type)
-        .bind(transit_district_id)
-        .bind(status)
-        .bind(transit_approval_status)
-        .bind(estimated_duration_minutes)
-        .bind(now)
-        .bind(estimated_arrival)
-        .execute(&self.pool)
-        .await?;
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Transfert introuvable.".into()))
+}
 
-        let created = self.find_by_id(id).await?.ok_or_else(|| {
-            AppError::InternalError("Transfert non retrouve apres insertion.".to_string())
-        })?;
+pub async fn pending_requests(db: &SqlitePool, source: &str, resource: &str) -> Result<Vec<String>, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT u.username || ' → ' || t.target_code FROM transfers t JOIN users u ON u.id = t.requester_id
+         WHERE t.status = 'PENDING' AND t.source_code = ? AND t.resource_code = ?",
+    )
+    .bind(source)
+    .bind(resource)
+    .fetch_all(db)
+    .await?)
+}
 
-        Ok(created)
-    }
+pub async fn has_pending_need(db: &SqlitePool, district: &str, resource: &str) -> Result<bool, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM transfers WHERE status = 'PENDING' AND target_code = ? AND resource_code = ?)",
+    )
+    .bind(district)
+    .bind(resource)
+    .fetch_one(db)
+    .await?)
+}
 
-    pub async fn find_by_id(&self, id: &str) -> Result<Option<TransferRequest>, AppError> {
-        let transfer = sqlx::query_as::<_, TransferRequest>(
-            r#"
-            SELECT id, requester_id, source_district_id, target_district_id,
-                   resource_type_id, quantity, route_type, transit_district_id,
-                   status, transit_approval_status, estimated_duration_minutes,
-                   departed_at, estimated_arrival_at, delivered_at,
-                   rejection_reason, created_at, updated_at
-            FROM transfer_requests
-            WHERE id = $1
-            "#
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?;
+pub async fn insert<'e>(db: impl SqliteExecutor<'e>, t: &Transfer) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO transfers (id, requester_id, source_code, target_code, transit_code, resource_code, quantity, route,
+         is_requisition, source_approved, transit_approved, status, duration_minutes, created_at, departed_at, arrival_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&t.id)
+    .bind(&t.requester_id)
+    .bind(&t.source_code)
+    .bind(&t.target_code)
+    .bind(&t.transit_code)
+    .bind(&t.resource_code)
+    .bind(t.quantity)
+    .bind(t.route)
+    .bind(t.is_requisition)
+    .bind(t.source_approved)
+    .bind(t.transit_approved)
+    .bind(t.status)
+    .bind(t.duration_minutes)
+    .bind(t.created_at)
+    .bind(t.departed_at)
+    .bind(t.arrival_at)
+    .execute(db)
+    .await?;
+    Ok(())
+}
 
-        Ok(transfer)
-    }
-
-    pub async fn find_all_detailed(&self) -> Result<Vec<TransferRequestDetail>, AppError> {
-        let transfers = sqlx::query_as::<_, TransferRequestDetail>(
-            r#"
-            SELECT 
-                tr.id,
-                tr.requester_id,
-                u.display_name as requester_name,
-                u.role as requester_role,
-                tr.source_district_id,
-                sd.code as source_district_code,
-                sd.name as source_district_name,
-                tr.target_district_id,
-                td.code as target_district_code,
-                td.name as target_district_name,
-                tr.resource_type_id,
-                rt.code as resource_code,
-                rt.name as resource_name,
-                rt.unit,
-                tr.quantity,
-                tr.route_type,
-                tr.transit_district_id,
-                xd.code as transit_district_code,
-                tr.status,
-                tr.transit_approval_status,
-                tr.estimated_duration_minutes,
-                tr.departed_at,
-                tr.estimated_arrival_at,
-                tr.delivered_at,
-                tr.rejection_reason,
-                tr.created_at,
-                tr.updated_at
-            FROM transfer_requests tr
-            JOIN user_accounts u ON tr.requester_id = u.id
-            JOIN districts sd ON tr.source_district_id = sd.id
-            JOIN districts td ON tr.target_district_id = td.id
-            JOIN resource_types rt ON tr.resource_type_id = rt.id
-            LEFT JOIN districts xd ON tr.transit_district_id = xd.id
-            ORDER BY tr.created_at DESC
-            "#
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(transfers)
-    }
-
-    pub async fn update_status(
-        &self,
-        id: &str,
-        new_status: &str,
-        rejection_reason: Option<&str>,
-    ) -> Result<(), AppError> {
-        let delivered_at = if new_status == "DELIVERED" {
-            Some(Utc::now())
-        } else {
-            None
-        };
-
-        sqlx::query(
-            r#"
-            UPDATE transfer_requests
-            SET status = $1,
-                rejection_reason = $2,
-                delivered_at = COALESCE($3, delivered_at),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $4
-            "#
-        )
-        .bind(new_status)
-        .bind(rejection_reason)
-        .bind(delivered_at)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn update_transit_approval(
-        &self,
-        id: &str,
-        transit_status: &str,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            UPDATE transfer_requests
-            SET transit_approval_status = $1,
-                status = CASE WHEN $1 = 'APPROVED' THEN 'IN_TRANSIT' ELSE status END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2
-            "#
-        )
-        .bind(transit_status)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
+pub async fn update<'e>(db: impl SqliteExecutor<'e>, t: &Transfer, expected: TransferStatus) -> Result<bool, AppError> {
+    let result = sqlx::query(
+        "UPDATE transfers SET source_approved = ?, transit_approved = ?, status = ?, departed_at = ?, arrival_at = ?,
+         delivered_at = ? WHERE id = ? AND status = ?",
+    )
+    .bind(t.source_approved)
+    .bind(t.transit_approved)
+    .bind(t.status)
+    .bind(t.departed_at)
+    .bind(t.arrival_at)
+    .bind(t.delivered_at)
+    .bind(&t.id)
+    .bind(expected)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() == 1)
 }

@@ -1,16 +1,16 @@
-import { DistrictResourceDetail } from '../../models/kaiju.models';
+import { Stock } from '../../models/kaiju.models';
 
 export const RESOURCE_ORDER: string[] = [
-  'WATER',
-  'FOOD',
-  'MED_KIT',
-  'GENERATOR',
-  'FUEL',
-  'SHELTER',
-  'MEDIC',
-  'ATV',
-  'CLEARING_GEAR',
-  'WATER_PURIFIER'
+  'MEDICAL',
+  'RESCUE',
+  'TRANSPORT',
+  'SHELTERS',
+  'FOOD_WATER',
+  'COMMUNICATION',
+  'POWER',
+  'ENGINEERING',
+  'SECURITY',
+  'HAZMAT'
 ];
 
 export const DISTRICT_CODES: string[] = ['A', 'E', 'W', 'X', 'Z'];
@@ -56,7 +56,6 @@ export interface DistrictSlice {
 export interface StockView {
   code: string;
   name: string;
-  unit: string;
   retentionPct: number;
   figures: StockFigures;
   gauge: StockGauge;
@@ -126,18 +125,16 @@ function clampPct(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-export function figuresOf(item: DistrictResourceDetail): StockFigures {
+export function figuresOf(item: Stock): StockFigures {
   const initial = Math.max(0, num(item.initial_quantity));
   const current = Math.max(0, num(item.current_quantity));
   const reserved = Math.max(0, num(item.reserved_quantity));
-  const available = Number.isFinite(Number(item.available_quantity))
-    ? Number(item.available_quantity)
-    : current - reserved;
-  const minRetained = Number.isFinite(Number(item.min_retained_quantity))
-    ? Number(item.min_retained_quantity)
-    : Math.ceil(initial * num(item.min_retention_pct));
-  const transferable = Number.isFinite(Number(item.transferable_quantity))
-    ? Number(item.transferable_quantity)
+  const available = Number.isFinite(Number(item.available)) ? Number(item.available) : current - reserved;
+  const minRetained = Number.isFinite(Number(item.min_retained))
+    ? Number(item.min_retained)
+    : Math.ceil((initial * num(item.retention_pct)) / 100);
+  const transferable = Number.isFinite(Number(item.transferable))
+    ? Number(item.transferable)
     : Math.max(0, available - minRetained);
   return { initial, current, reserved, available, minRetained, transferable };
 }
@@ -198,12 +195,10 @@ function resourceRank(code: string): number {
   return idx === -1 ? RESOURCE_ORDER.length : idx;
 }
 
-export function buildStockViews(inventory: DistrictResourceDetail[], districtCode: string | null): StockView[] {
-  const scoped = districtCode
-    ? inventory.filter((item) => item.district_code === districtCode)
-    : inventory;
+export function buildStockViews(inventory: Stock[], districtCode: string | null): StockView[] {
+  const scoped = districtCode ? inventory.filter((item) => item.district_code === districtCode) : inventory;
 
-  const groups = new Map<string, DistrictResourceDetail[]>();
+  const groups = new Map<string, Stock[]>();
   for (const item of scoped) {
     const bucket = groups.get(item.resource_code);
     if (bucket) {
@@ -221,18 +216,17 @@ export function buildStockViews(inventory: DistrictResourceDetail[], districtCod
         const figures = figuresOf(item);
         return {
           code: item.district_code,
-          name: item.district_name || DISTRICT_FALLBACK_NAMES[item.district_code] || item.district_code,
+          name: DISTRICT_FALLBACK_NAMES[item.district_code] || item.district_code,
           figures,
           gauge: gaugeOf(figures)
         };
       })
       .sort((a, b) => a.code.localeCompare(b.code));
     const figures = sumFigures(districts.map((d) => d.figures));
-    const retentionPct = items.reduce((acc, item) => acc + num(item.min_retention_pct), 0) / items.length;
+    const retentionPct = items.reduce((acc, item) => acc + num(item.retention_pct), 0) / items.length;
     views.push({
       code,
       name: first.resource_name || code,
-      unit: first.unit || '',
       retentionPct,
       figures,
       gauge: gaugeOf(figures),

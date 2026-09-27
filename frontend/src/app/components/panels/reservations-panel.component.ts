@@ -1,133 +1,130 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { KaijuApiService } from '../../services/kaiju-api.service';
+import { HttpErrorResponse } from '@angular/common/http';
+import { AuthService } from '../../services/auth.service';
 import { CrisisContextService } from '../../services/crisis-context.service';
-import { District, ResourceType } from '../../models/kaiju.models';
+import { KaijuApiService, describeError } from '../../services/kaiju-api.service';
+import { Reservation } from '../../models/kaiju.models';
+
+function toLocalInput(date: Date): string {
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return shifted.toISOString().slice(0, 16);
+}
 
 @Component({
   selector: 'app-reservations-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [DatePipe, FormsModule],
   template: `
-    <div class="h-full flex flex-col font-mono text-xs select-none space-y-3">
-      <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
-        <span class="text-zinc-400 text-[10px] uppercase tracking-wider">
-          ALLOCATION DIRECTE D'URGENCE (INTRA-QUARTIER)
-        </span>
-        <span class="text-green-500 text-[10px] uppercase font-bold">
-          [MODE OPERATIONNEL]
-        </span>
-      </div>
+    <div class="h-full flex flex-col font-mono text-xs space-y-3">
+      @if (error) {
+        <div class="hud-error" role="alert" data-testid="reservation-error">{{ error }}</div>
+      }
 
-      <form (ngSubmit)="submitReservation()" class="space-y-3">
-        <div *ngIf="errorMessage" class="p-2.5 bg-red-950/60 border border-red-600 text-red-200 text-xs space-y-1">
-          <div class="font-bold">[CONFLIT RESSOURCE : {{ errorCode }}]</div>
-          <p class="text-[11px] leading-relaxed">{{ errorMessage }}</p>
-        </div>
-
-        <div *ngIf="successMessage" class="p-2.5 bg-green-950/60 border border-green-600 text-green-200 text-xs">
-          {{ successMessage }}
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-zinc-400 text-[10px] uppercase mb-1">QUARTIER :</label>
-            <select [(ngModel)]="districtCode" name="district"
-                    class="w-full bg-black border border-zinc-700 text-white p-1.5 text-xs focus:outline-none focus:border-green-500">
-              <option *ngFor="let d of districts" [value]="d.code">
-                [{{ d.code }}] {{ d.name }}
-              </option>
-            </select>
+      @if (district()) {
+        <form (ngSubmit)="submit()" class="space-y-3">
+          <h3 class="hud-title">Nouvelle réservation dans le quartier {{ district() }}</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="hud-label">
+              <span>Équipe</span>
+              <input class="hud-input" name="team" [(ngModel)]="teamName" required />
+            </label>
+            <label class="hud-label">
+              <span>Ressource</span>
+              <select class="hud-input" name="resource" [(ngModel)]="resource">
+                @for (r of context.resourceTypes(); track r.code) {
+                  <option [value]="r.code">{{ r.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="hud-label">
+              <span>Quantité</span>
+              <input class="hud-input" type="number" min="1" name="quantity" [(ngModel)]="quantity" required />
+            </label>
+            <div class="hud-label">
+              <span>Disponible</span>
+              <div class="p-1.5 text-green-400 font-bold">{{ available() }}</div>
+            </div>
+            <label class="hud-label">
+              <span>Début</span>
+              <input class="hud-input" type="datetime-local" name="startsAt" [(ngModel)]="startsAt" required />
+            </label>
+            <label class="hud-label">
+              <span>Fin</span>
+              <input class="hud-input" type="datetime-local" name="endsAt" [(ngModel)]="endsAt" required />
+            </label>
           </div>
+          <button type="submit" class="hud-btn w-full py-2" [disabled]="submitting">Réserver</button>
+        </form>
+      } @else {
+        <p class="hud-empty">Les réservations sont gérées par les coordinateurs de quartier (QC).</p>
+      }
 
-          <div>
-            <label class="block text-zinc-400 text-[10px] uppercase mb-1">BRIGADE / EQUIPE :</label>
-            <input type="text" [(ngModel)]="teamName" name="team" required placeholder="Ex: BRAVO-RESCUE-1"
-                   class="w-full bg-black border border-zinc-700 text-white p-1.5 text-xs focus:outline-none focus:border-green-500" />
+      <section class="flex-1 overflow-y-auto space-y-2 pr-1">
+        <h3 class="hud-title">Réservations actives</h3>
+        @for (r of active(); track r.id) {
+          <div class="hud-card flex items-center justify-between" data-testid="reservation-card">
+            <div>
+              <div class="text-white">[{{ r.district_code }}] {{ r.team_name }} · {{ r.quantity }} × {{ r.resource_name }}</div>
+              <div class="text-[10px] text-zinc-500">{{ r.starts_at | date: 'dd/MM HH:mm' }} → {{ r.ends_at | date: 'dd/MM HH:mm' }}</div>
+            </div>
+            @if (r.district_code === district()) {
+              <button class="hud-btn" (click)="giveBack(r)">Restituer</button>
+            }
           </div>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-zinc-400 text-[10px] uppercase mb-1">RESSOURCE :</label>
-            <select [(ngModel)]="selectedResource" name="resource"
-                    class="w-full bg-black border border-zinc-700 text-white p-1.5 text-xs focus:outline-none focus:border-green-500">
-              <option *ngFor="let r of resourceTypes" [value]="r.code">
-                {{ r.name }} ({{ r.unit }})
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-zinc-400 text-[10px] uppercase mb-1">QUANTITE :</label>
-            <input type="number" [(ngModel)]="quantity" name="qty" min="1" required
-                   class="w-full bg-black border border-zinc-700 text-white p-1.5 text-xs focus:outline-none focus:border-green-500" />
-          </div>
-        </div>
-
-        <button type="submit" [disabled]="isSubmitting"
-                class="w-full py-2 border border-green-500 text-green-400 hover:bg-green-500 hover:text-black font-bold uppercase tracking-wider text-xs transition-colors">
-          {{ isSubmitting ? 'VERIFICATION ET VERROUILLAGE...' : 'RESERVER RESSOURCE POUR LA BRIGADE' }}
-        </button>
-      </form>
+        } @empty {
+          <p class="hud-empty">Aucune réservation active.</p>
+        }
+      </section>
     </div>
   `
 })
-export class ReservationsPanelComponent implements OnInit {
+export class ReservationsPanelComponent {
   context = inject(CrisisContextService);
+  private auth = inject(AuthService);
   private api = inject(KaijuApiService);
 
-  districts: District[] = [];
-  resourceTypes: ResourceType[] = [];
+  readonly district = computed(() => (this.auth.user()?.role === 'QC' ? this.auth.user()?.district : null));
+  readonly active = computed(() => this.context.reservations().filter((r) => r.status === 'ACTIVE'));
 
-  districtCode = 'X';
-  teamName = 'SQUAD-ECHO-1';
-  selectedResource = 'WATER';
-  quantity = 50;
+  teamName = '';
+  resource = 'MEDICAL';
+  quantity = 1;
+  startsAt = toLocalInput(new Date());
+  endsAt = toLocalInput(new Date(Date.now() + 4 * 3600000));
+  submitting = false;
+  error = '';
 
-  isSubmitting = false;
-  errorMessage = '';
-  errorCode = '';
-  successMessage = '';
-
-  ngOnInit(): void {
-    this.api.getDistricts().subscribe((d) => {
-      this.districts = d;
-      if (this.context.selectedDistrictCode()) {
-        this.districtCode = this.context.selectedDistrictCode()!;
-      }
-    });
-
-    this.api.getResourceTypes().subscribe((r) => {
-      this.resourceTypes = r;
-    });
+  available(): number {
+    const district = this.district();
+    return district ? this.context.stock(district, this.resource)?.available ?? 0 : 0;
   }
 
-  submitReservation(): void {
-    this.isSubmitting = true;
-    this.errorMessage = '';
-    this.errorCode = '';
-    this.successMessage = '';
+  submit(): void {
+    this.submitting = true;
+    this.error = '';
+    this.api
+      .reserve({
+        resource: this.resource,
+        team_name: this.teamName,
+        quantity: this.quantity,
+        starts_at: new Date(this.startsAt).toISOString(),
+        ends_at: new Date(this.endsAt).toISOString()
+      })
+      .subscribe({
+        next: () => (this.submitting = false),
+        error: (err: HttpErrorResponse) => {
+          this.submitting = false;
+          this.error = describeError(err);
+        }
+      });
+  }
 
-    const payload = {
-      district_id_or_code: this.districtCode,
-      resource_code: this.selectedResource,
-      user_id: this.context.currentUser().id,
-      team_name: this.teamName,
-      quantity: this.quantity
-    };
-
-    this.api.reserveResource(payload).subscribe({
-      next: (res) => {
-        this.isSubmitting = false;
-        this.successMessage = `RESERVATION VALIDEE : ${this.quantity} ${this.selectedResource} BLOQUES POUR ${this.teamName} [REF: ${res.reservation_id}]`;
-      },
-      error: (err) => {
-        this.isSubmitting = false;
-        this.errorCode = err.error?.error_code || 'CONFLIT';
-        this.errorMessage = err.error?.message || 'Erreur lors de la reservation.';
-      }
+  giveBack(reservation: Reservation): void {
+    this.error = '';
+    this.api.returnReservation(reservation.id).subscribe({
+      error: (err: HttpErrorResponse) => (this.error = describeError(err))
     });
   }
 }

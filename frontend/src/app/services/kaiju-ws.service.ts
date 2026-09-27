@@ -1,138 +1,89 @@
-import { Injectable, signal, isDevMode } from '@angular/core';
+import { Injectable, isDevMode, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { TacticalAlert, WsMessage } from '../models/kaiju.models';
 
-@Injectable({
-  providedIn: 'root'
-})
+const WS_URL = isDevMode()
+  ? 'ws://localhost:8080/ws'
+  : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+
+let alertSequence = 0;
+
+function toAlert(message: WsMessage): TacticalAlert | null {
+  const payload = message.payload;
+  const base = { id: String(++alertSequence), timestamp: new Date() };
+  switch (message.type) {
+    case 'RESOURCE_CONFLICT':
+      return {
+        ...base,
+        severity: 'CRITICAL',
+        title: `Conflit de ressource [${payload.district}]`,
+        message: `${payload.message} Équipes : ${payload.contenders.join(', ')}.`
+      };
+    case 'LEVEL_CHANGED': {
+      const escalation = payload.level > payload.previous_level;
+      return {
+        ...base,
+        severity: escalation ? (payload.level >= 4 ? 'CRITICAL' : 'WARNING') : 'INFO',
+        title: `${escalation ? 'Escalade' : 'Désescalade'} ${payload.district} : niveau ${payload.previous_level} → ${payload.level}`,
+        message: `Niveau de la ville : ${payload.city_level}.`
+      };
+    }
+    case 'RETENTION_CHANGED':
+      return {
+        ...base,
+        severity: 'WARNING',
+        title: `Seuil de rétention : ${payload.retention_pct} %`,
+        message: 'Les quantités transférables ont été recalculées.'
+      };
+    default:
+      return null;
+  }
+}
+
+@Injectable({ providedIn: 'root' })
 export class KaijuWsService {
-  private socket: WebSocket | null = null;
-  private reconnectTimeout: any = null;
-  private isDestroyed = false;
-
-  readonly isConnected = signal<boolean>(false);
+  readonly isConnected = signal(false);
   readonly alerts = signal<TacticalAlert[]>([]);
-  readonly latestDisaster = signal<any>(null);
+  readonly events$ = new Subject<WsMessage>();
 
-  readonly messages$ = new Subject<WsMessage>();
-  readonly resourceUpdates$ = new Subject<any>();
-  readonly resourceConflicts$ = new Subject<any>();
-  readonly disasterChanges$ = new Subject<any>();
-  readonly transferUpdates$ = new Subject<any>();
+  private socket: WebSocket | null = null;
+  private token: string | null = null;
+  private retry?: ReturnType<typeof setTimeout>;
 
-  constructor() {
-    this.connect();
+  connect(token: string): void {
+    this.token = token;
+    this.open();
   }
 
-  connect(): void {
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-
-    const wsUrl = this.resolveWsUrl();
-    try {
-      this.socket = new WebSocket(wsUrl);
-
-      this.socket.onopen = () => {
-        this.isConnected.set(true);
-      };
-
-      this.socket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleIncomingMessage(data);
-        } catch (e) {}
-      };
-
-      this.socket.onclose = () => {
-        this.isConnected.set(false);
-        if (!this.isDestroyed) {
-          this.scheduleReconnect();
-        }
-      };
-
-      this.socket.onerror = () => {
-        this.socket?.close();
-      };
-    } catch {
-      this.scheduleReconnect();
-    }
-  }
-
-  private resolveWsUrl(): string {
-    if (isDevMode()) {
-      return 'ws://localhost:8080/ws';
-    }
-    if (typeof window !== 'undefined') {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${protocol}//${window.location.host}/ws`;
-    }
-    return 'ws://localhost:8080/ws';
-  }
-
-  private scheduleReconnect(): void {
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = setTimeout(() => {
-      this.connect();
-    }, 3000);
-  }
-
-  private handleIncomingMessage(msg: WsMessage): void {
-    this.messages$.next(msg);
-
-    switch (msg.type) {
-      case 'RESOURCE_UPDATED':
-        this.resourceUpdates$.next(msg.payload);
-        break;
-
-      case 'RESOURCE_CONFLICT':
-        this.resourceConflicts$.next(msg.payload);
-        this.addAlert({
-          id: `conflict_${Date.now()}`,
-          severity: 'CRITICAL',
-          title: `CONFLIT DE RESSOURCE [${msg.payload.district_code}]`,
-          message: msg.payload.message,
-          timestamp: new Date()
-        });
-        break;
-
-      case 'DISASTER_TRIGGERED':
-        this.latestDisaster.set(msg.payload);
-        this.disasterChanges$.next(msg.payload);
-        break;
-
-      case 'DISASTER_RESOLVED':
-        this.latestDisaster.set(null);
-        this.disasterChanges$.next(msg.payload);
-        break;
-
-      case 'TRANSFER_STATUS_CHANGED':
-        this.transferUpdates$.next(msg.payload);
-        break;
-
-      case 'ALERT':
-        this.addAlert({
-          id: `alert_${Date.now()}`,
-          severity: msg.payload.severity || 'WARNING',
-          title: msg.payload.title,
-          message: msg.payload.message,
-          timestamp: new Date()
-        });
-        break;
-    }
-  }
-
-  addAlert(alert: TacticalAlert): void {
-    this.alerts.update((current) => [alert, ...current.slice(0, 19)]);
+  disconnect(): void {
+    this.token = null;
+    clearTimeout(this.retry);
+    this.socket?.close();
+    this.alerts.set([]);
   }
 
   dismissAlert(id: string): void {
-    this.alerts.update((current) => current.filter((a) => a.id !== id));
+    this.alerts.update((alerts) => alerts.filter((alert) => alert.id !== id));
   }
 
-  send(message: string): void {
-    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(message);
+  private open(): void {
+    if (!this.token || this.socket) return;
+    const socket = new WebSocket(`${WS_URL}?token=${encodeURIComponent(this.token)}`);
+    socket.onopen = () => this.isConnected.set(true);
+    socket.onmessage = (event) => this.handle(JSON.parse(event.data));
+    socket.onclose = () => {
+      this.isConnected.set(false);
+      this.socket = null;
+      this.retry = setTimeout(() => this.open(), 3000);
+    };
+    this.socket = socket;
+  }
+
+  private handle(message: WsMessage): void {
+    this.events$.next(message);
+    const alert = toAlert(message);
+    if (alert) {
+      this.alerts.update((alerts) => [alert, ...alerts].slice(0, 30));
     }
   }
 }

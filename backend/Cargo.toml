@@ -3,25 +3,21 @@ name = "kaiju-backend"
 version = "0.1.0"
 edition = "2021"
 authors = ["Théo Busiris <theo.busiris@epitech.eu>"]
-description = "Backend opérationnel haute résilience pour KAIJU Crisis Manager (Tokyork)"
 
 [dependencies]
-actix-web = "4.9"
 actix-cors = "0.7"
+actix-web = "4.9"
 actix-ws = "0.3"
-tokio = { version = "1.38", features = ["full"] }
-tokio-stream = "0.1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "uuid", "migrate"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+bcrypt = "0.17"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.8", features = ["serde", "v4"] }
 dotenvy = "0.15"
 env_logger = "0.11"
-log = "0.4"
-thiserror = "1.0"
 futures-util = "0.3"
-bytemuck = "1.16"
-
-[dev-dependencies]
-actix-rt = "2.9"
+jsonwebtoken = "9.3"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono"] }
+thiserror = "1.0"
+tokio = { version = "1.38", features = ["full"] }
+uuid = { version = "1.8", features = ["v4"] }

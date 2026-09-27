@@ -1,11 +1,7 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Observable, Subject, Subscription, merge, of } from 'rxjs';
-import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
-import { KaijuApiService } from '../../services/kaiju-api.service';
 import { KaijuWsService } from '../../services/kaiju-ws.service';
 import { CrisisContextService } from '../../services/crisis-context.service';
-import { DistrictResourceDetail } from '../../models/kaiju.models';
 import { BoDonutComponent, DonutSegment } from './bo-donut.component';
 import { BoResourceCardComponent } from './bo-resource-card.component';
 import {
@@ -19,11 +15,6 @@ import {
 } from './bo-stock.util';
 
 type SortMode = 'CATALOGUE' | 'CRITICITE';
-
-interface LoadResult {
-  ok: boolean;
-  data: DistrictResourceDetail[];
-}
 
 interface SummaryGauge {
   id: string;
@@ -39,15 +30,14 @@ interface SummaryGauge {
   standalone: true,
   imports: [CommonModule, BoDonutComponent, BoResourceCardComponent],
   template: `
-    <section class="h-full w-full min-w-[360px] flex flex-col bg-black text-zinc-300 font-mono text-xs select-none">
+    <section data-testid="bo-sidebar" class="h-full w-full min-w-[360px] flex flex-col bg-black text-zinc-300 font-mono text-xs select-none">
       <header class="shrink-0 border-b border-zinc-800 bg-zinc-950/80">
         <div class="h-8 px-3 flex items-center gap-2 border-b border-zinc-900">
           <span class="px-1.5 py-px bg-green-500 text-black text-[10px] font-bold tracking-widest">[BO]</span>
-          <span class="text-[10px] text-zinc-400 tracking-widest uppercase truncate">LOGISTIQUE // ETAT DES STOCKS</span>
+          <span class="text-[10px] text-zinc-400 tracking-widest uppercase truncate">Logistique · État des stocks</span>
           <div class="ml-auto flex items-center gap-1.5">
-            <span class="text-[9px] tracking-widest tabular-nums"
-                  [ngClass]="loadError() ? 'text-red-400' : (loading() ? 'text-amber-400' : 'text-zinc-500')">
-              {{ loadError() ? '[SYNC KO]' : (loading() ? '[SYNC...]' : '[SYNC ' + lastSync() + ']') }}
+            <span class="text-[9px] tracking-widest tabular-nums text-zinc-500">
+              [SYNC {{ lastSync() }}]
             </span>
             <button type="button"
                     (click)="refresh()"
@@ -72,7 +62,7 @@ interface SummaryGauge {
               <span class="text-sm font-bold text-white tracking-widest uppercase truncate">{{ districtName(code) }}</span>
             </ng-container>
             <ng-template #globalTitle>
-              <span class="text-sm font-bold text-white tracking-widest uppercase truncate">TOKYORK // VUE GLOBALE</span>
+              <span class="text-sm font-bold text-white tracking-widest uppercase truncate">Tokyork · Vue globale</span>
               <span class="text-[9px] text-zinc-500 tracking-widest shrink-0">{{ districtCodes.length }} QUARTIERS AGREGES</span>
             </ng-template>
           </div>
@@ -89,6 +79,7 @@ interface SummaryGauge {
             <button *ngFor="let code of districtCodes"
                     type="button"
                     role="tab"
+                    [attr.data-testid]="'district-tab-' + code"
                     [attr.aria-selected]="selectedCode() === code"
                     (click)="selectDistrict(code)"
                     [title]="districtName(code)"
@@ -148,21 +139,12 @@ interface SummaryGauge {
         </div>
 
         <div class="p-3 space-y-2">
-          <div *ngIf="loadError() && inventory().length === 0"
-               class="border border-red-900 bg-red-950/30 p-3 text-[10px] text-red-400 tracking-widest uppercase flex items-center justify-between gap-2">
-            <span>[LIAISON API ROMPUE] // STOCKS INDISPONIBLES</span>
-            <button type="button" (click)="refresh()"
-                    class="px-2 py-0.5 border border-red-700 hover:border-red-400 text-red-300 hover:text-white transition-colors">
-              RETENTER
-            </button>
-          </div>
-
-          <div *ngIf="!loadError() && loading() && inventory().length === 0"
+          <div *ngIf="context.stocks().length === 0"
                class="border border-zinc-800 p-3 text-[10px] text-amber-400 tracking-widest uppercase animate-pulse">
             [ACQUISITION DES STOCKS EN COURS...]
           </div>
 
-          <div *ngIf="!loading() && inventory().length > 0 && views().length === 0"
+          <div *ngIf="context.stocks().length > 0 && views().length === 0"
                class="border border-zinc-800 p-3 text-[10px] text-zinc-500 tracking-widest uppercase">
             [AUCUNE RESSOURCE REFERENCEE POUR CE SECTEUR]
           </div>
@@ -192,22 +174,21 @@ interface SummaryGauge {
     </section>
   `
 })
-export class BoSidebarComponent implements OnInit, OnDestroy {
+export class BoSidebarComponent {
   readonly context = inject(CrisisContextService);
   readonly ws = inject(KaijuWsService);
-  private readonly api = inject(KaijuApiService);
 
   readonly districtCodes = DISTRICT_CODES;
-  readonly inventory = signal<DistrictResourceDetail[]>([]);
-  readonly loading = signal<boolean>(false);
-  readonly loadError = signal<boolean>(false);
-  readonly lastSync = signal<string>('--:--:--Z');
   readonly sortMode = signal<SortMode>('CATALOGUE');
+  readonly lastSync = computed(() => {
+    this.context.stocks();
+    return this.zulu();
+  });
 
   readonly selectedCode = computed(() => this.context.selectedDistrictCode());
 
   private readonly baseViews = computed<StockView[]>(() =>
-    buildStockViews(this.inventory(), this.selectedCode())
+    buildStockViews(this.context.stocks(), this.selectedCode())
   );
 
   readonly views = computed<StockView[]>(() =>
@@ -219,7 +200,7 @@ export class BoSidebarComponent implements OnInit, OnDestroy {
   readonly districtCriticalCount = computed<Record<string, number>>(() => {
     const counts: Record<string, number> = {};
     for (const code of DISTRICT_CODES) {
-      counts[code] = buildStockViews(this.inventory(), code).filter((v) => v.gauge.level === 'CRITICAL').length;
+      counts[code] = buildStockViews(this.context.stocks(), code).filter((v) => v.gauge.level === 'CRITICAL').length;
     }
     return counts;
   });
@@ -273,49 +254,16 @@ export class BoSidebarComponent implements OnInit, OnDestroy {
     ];
   });
 
-  private readonly refresh$ = new Subject<void>();
-  private readonly subs = new Subscription();
-
-  ngOnInit(): void {
-    this.subs.add(
-      this.refresh$
-        .pipe(switchMap(() => this.fetchInventory()))
-        .subscribe((result) => {
-          this.loading.set(false);
-          if (result.ok) {
-            this.inventory.set(result.data);
-            this.loadError.set(false);
-            this.lastSync.set(this.zulu());
-          } else {
-            this.loadError.set(true);
-          }
-        })
-    );
-
-    this.subs.add(
-      merge(this.ws.resourceUpdates$, this.ws.transferUpdates$)
-        .pipe(debounceTime(150))
-        .subscribe(() => this.refresh())
-    );
-
-    this.refresh();
-  }
-
-  ngOnDestroy(): void {
-    this.subs.unsubscribe();
-  }
-
   refresh(): void {
-    this.refresh$.next();
+    this.context.refreshStocks();
   }
 
   selectDistrict(code: string | null): void {
-    this.context.selectDistrict(code);
+    this.context.selectedDistrictCode.set(code);
   }
 
   districtName(code: string): string {
-    const found = this.inventory().find((item) => item.district_code === code);
-    return (found?.district_name || DISTRICT_FALLBACK_NAMES[code] || code).toUpperCase();
+    return (this.context.districts().find((d) => d.code === code)?.name || DISTRICT_FALLBACK_NAMES[code] || code).toUpperCase();
   }
 
   trackByCode(_index: number, stock: StockView): string {
@@ -324,14 +272,6 @@ export class BoSidebarComponent implements OnInit, OnDestroy {
 
   trackById(_index: number, gauge: SummaryGauge): string {
     return gauge.id;
-  }
-
-  private fetchInventory(): Observable<LoadResult> {
-    this.loading.set(true);
-    return this.api.getInventory().pipe(
-      map((data): LoadResult => ({ ok: true, data: Array.isArray(data) ? data : [] })),
-      catchError(() => of<LoadResult>({ ok: false, data: [] }))
-    );
   }
 
   private pct(value: number): string {

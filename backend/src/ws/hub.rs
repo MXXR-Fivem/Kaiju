@@ -1,82 +1,58 @@
 use serde::Serialize;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 
+use crate::domain::TransferStatus;
+
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", content = "payload")]
+#[serde(tag = "type", content = "payload", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WsEvent {
-    #[serde(rename = "RESOURCE_UPDATED")]
     ResourceUpdated {
-        district_id: String,
-        resource_id: String,
+        district: String,
+        resource: String,
         current_quantity: i64,
         reserved_quantity: i64,
-        available_quantity: i64,
+        available: i64,
     },
-
-    #[serde(rename = "RESOURCE_CONFLICT")]
     ResourceConflict {
-        district_code: String,
-        resource_code: String,
-        message: String,
+        district: String,
+        resource: String,
         contenders: Vec<String>,
-    },
-
-    #[serde(rename = "DISASTER_TRIGGERED")]
-    DisasterTriggered {
-        disaster_id: String,
-        district_id: String,
-        district_code: String,
-        disaster_type: String,
-        intensity: i64,
-        level: i64,
-    },
-
-    #[serde(rename = "DISASTER_RESOLVED")]
-    DisasterResolved {
-        disaster_id: String,
-        district_id: String,
-        district_code: String,
-    },
-
-    #[serde(rename = "TRANSFER_STATUS_CHANGED")]
-    TransferStatusChanged {
-        transfer_id: String,
-        status: String,
-        transit_approval_status: String,
-    },
-
-    #[serde(rename = "ALERT")]
-    Alert {
-        severity: String,
-        title: String,
         message: String,
     },
+    LevelChanged {
+        district: String,
+        previous_level: i64,
+        level: i64,
+        city_level: i64,
+    },
+    TransferUpdated {
+        id: String,
+        status: TransferStatus,
+    },
+    RetentionChanged {
+        retention_pct: i64,
+    },
+    Reset,
 }
 
 #[derive(Clone)]
 pub struct WsHub {
-    tx: Arc<broadcast::Sender<String>>,
+    tx: broadcast::Sender<String>,
 }
 
 impl WsHub {
-    pub fn new(capacity: usize) -> Self {
-        let (tx, _) = broadcast::channel(capacity);
-        Self { tx: Arc::new(tx) }
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel(256);
+        Self { tx }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<String> {
         self.tx.subscribe()
     }
 
-    pub fn broadcast_event(&self, event: WsEvent) {
+    pub fn send(&self, event: WsEvent) {
         if let Ok(json) = serde_json::to_string(&event) {
             let _ = self.tx.send(json);
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn broadcast_raw(&self, message: &str) {
-        let _ = self.tx.send(message.to_string());
     }
 }

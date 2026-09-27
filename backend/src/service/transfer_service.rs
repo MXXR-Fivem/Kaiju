@@ -1,254 +1,216 @@
-use std::sync::Arc;
+use chrono::{Duration, Utc};
 use uuid::Uuid;
-use crate::domain::{RulesEngine, TransferRequest, TransferRequestDetail};
-use crate::errors::AppError;
-use crate::repository::{DistrictRepository, ResourceRepository, TransferRepository, UserRepository};
-use crate::ws::{WsEvent, WsHub};
 
-pub struct TransferService {
-    district_repo: Arc<DistrictRepository>,
-    resource_repo: Arc<ResourceRepository>,
-    transfer_repo: Arc<TransferRepository>,
-    user_repo: Arc<UserRepository>,
-    ws_hub: Arc<WsHub>,
+use super::broadcast_stock;
+use crate::auth::AuthUser;
+use crate::domain::rules::{self, Action, Topology, XENO};
+use crate::domain::{NewTransfer, Role, Transfer, TransferStatus};
+use crate::errors::AppError;
+use crate::repository::{district_repo, resource_repo, transfer_repo};
+use crate::state::AppState;
+use crate::ws::WsEvent;
+
+pub async fn create(state: &AppState, user: &AuthUser, request: NewTransfer) -> Result<Transfer, AppError> {
+    let db = &state.db;
+    if request.quantity <= 0 {
+        return Err(AppError::Validation("La quantité doit être positive.".into()));
+    }
+    let topology = district_repo::topology(db).await?;
+    for code in [&request.source, &request.target] {
+        if !topology.contains(code) {
+            return Err(AppError::NotFound(format!("Quartier {code} introuvable.")));
+        }
+    }
+    let level = district_repo::city_level(db).await?;
+    let plan = topology.plan(&request.source, &request.target, request.route, level)?;
+    let action = match (request.requisition, plan.adjacent) {
+        (true, _) => Action::Requisition,
+        (false, true) => Action::AdjacentTransfer,
+        (false, false) => Action::OrganizeTransit,
+    };
+    rules::authorize(action, user.role, level)?;
+    if user.role == Role::QC && !user.is_qc_of(&request.target) {
+        return Err(AppError::PermissionDenied(
+            "Un QC ne peut demander des ressources que pour son propre quartier.".into(),
+        ));
+    }
+
+    let stock = resource_repo::find(db, &request.source, &request.resource).await?;
+    rules::check_withdrawal(&stock, request.quantity)?;
+    if !plan.adjacent {
+        ensure_no_adjacent_supplier(state, &topology, &request).await?;
+    }
+
+    let mut transfer = Transfer {
+        id: Uuid::new_v4().to_string(),
+        requester_id: user.id.clone(),
+        requester_name: user.username.clone(),
+        source_code: request.source,
+        target_code: request.target,
+        transit_code: plan.transit.clone(),
+        resource_code: request.resource,
+        resource_name: stock.resource_name,
+        quantity: request.quantity,
+        route: plan.route,
+        is_requisition: request.requisition,
+        source_approved: request.requisition,
+        transit_approved: plan.transit.filter(|_| !request.requisition).map(|_| false),
+        status: TransferStatus::Pending,
+        duration_minutes: plan.minutes,
+        created_at: Utc::now(),
+        departed_at: None,
+        arrival_at: None,
+        delivered_at: None,
+    };
+
+    if transfer.is_requisition {
+        dispatch(state, &mut transfer, true).await?;
+    } else {
+        transfer_repo::insert(db, &transfer).await?;
+        notify_contention(state, &transfer).await?;
+    }
+    state.hub.send(WsEvent::TransferUpdated { id: transfer.id.clone(), status: transfer.status });
+    Ok(transfer)
 }
 
-impl TransferService {
-    pub fn new(
-        district_repo: Arc<DistrictRepository>,
-        resource_repo: Arc<ResourceRepository>,
-        transfer_repo: Arc<TransferRepository>,
-        user_repo: Arc<UserRepository>,
-        ws_hub: Arc<WsHub>,
-    ) -> Self {
-        Self {
-            district_repo,
-            resource_repo,
-            transfer_repo,
-            user_repo,
-            ws_hub,
-        }
+pub async fn review(state: &AppState, user: &AuthUser, id: &str, approved: bool) -> Result<Transfer, AppError> {
+    let db = &state.db;
+    let mut transfer = transfer_repo::find(db, id).await?;
+    if transfer.status != TransferStatus::Pending {
+        return Err(AppError::Validation("Ce transfert n'est plus en attente.".into()));
+    }
+    let as_source = user.is_qc_of(&transfer.source_code) && !transfer.source_approved;
+    let as_transit = transfer.transit_code.as_deref().is_some_and(|code| user.is_qc_of(code))
+        && transfer.transit_approved == Some(false);
+    if !as_source && !as_transit {
+        return Err(AppError::PermissionDenied(
+            "Seul le QC du quartier source ou de transit peut statuer sur cette demande.".into(),
+        ));
     }
 
-    pub async fn request_transfer(
-        &self,
-        requester_id: &str,
-        source_district_id_or_code: &str,
-        target_district_id_or_code: &str,
-        resource_code: &str,
-        quantity: i64,
-        requested_route_type: &str,
-    ) -> Result<TransferRequest, AppError> {
-        if quantity <= 0 {
-            return Err(AppError::BadRequest("La quantite demandee doit etre strictement positive.".to_string()));
-        }
-
-        let requester = self.user_repo.find_by_id(requester_id).await?
-            .or(self.user_repo.find_by_username(requester_id).await?)
-            .ok_or_else(|| AppError::NotFound(format!("Operateur '{}' introuvable.", requester_id)))?;
-
-        let source = self.resolve_district(source_district_id_or_code).await?;
-        let target = self.resolve_district(target_district_id_or_code).await?;
-
-        if source.id == target.id {
-            return Err(AppError::BadRequest("Le quartier source et le quartier cible ne peuvent pas etre identiques.".to_string()));
-        }
-
-        if requester.role == "QC" {
-            if let Some(ref assigned) = requester.assigned_district_id {
-                if assigned != &source.id && assigned != &target.id {
-                    return Err(AppError::InsufficientPermissions {
-                        required_role: "QC affecte ou LC/CD".to_string(),
-                        current_role: requester.role.clone(),
-                        message: format!("En tant que QC, vous ne pouvez ordonner des transferts que pour votre propre quartier ({}).", source.code),
-                    });
-                }
-            }
-        }
-
-        let res_type = self.resource_repo.find_type_by_code(resource_code).await?
-            .ok_or_else(|| AppError::NotFound(format!("Type de ressource '{}' introuvable.", resource_code)))?;
-
-        let direct_adj = self.district_repo.find_adjacency_between(&source.id, &target.id, requested_route_type).await?;
-
-        let (is_direct, transit_district_id, base_minutes) = match direct_adj {
-            Some(adj) => (true, None, adj.base_transit_minutes),
-            None => {
-                let xeno = self.district_repo.find_by_code("X").await?
-                    .ok_or_else(|| AppError::InternalError("Quartier Xeno central introuvable.".to_string()))?;
-
-                if source.id == xeno.id || target.id == xeno.id {
-                    return Err(AppError::NonAdjacentTransfer {
-                        source_code: source.code.clone(),
-                        target_code: target.code.clone(),
-                        message: format!("Aucune route {} directe disponible entre {} et {}.", requested_route_type, source.code, target.code),
-                        transit_required_via: None,
-                    });
-                }
-
-                let adj_to_xeno = self.district_repo.find_adjacency_between(&source.id, &xeno.id, "LAND").await?;
-                let adj_from_xeno = self.district_repo.find_adjacency_between(&xeno.id, &target.id, "LAND").await?;
-
-                if adj_to_xeno.is_none() || adj_from_xeno.is_none() {
-                    return Err(AppError::NonAdjacentTransfer {
-                        source_code: source.code.clone(),
-                        target_code: target.code.clone(),
-                        message: format!("Impossible d'etablir un corridor logistique entre {} et {}.", source.code, target.code),
-                        transit_required_via: None,
-                    });
-                }
-
-                let total_minutes = adj_to_xeno.unwrap().base_transit_minutes + adj_from_xeno.unwrap().base_transit_minutes;
-                (false, Some(xeno.id), total_minutes)
-            }
-        };
-
-        let max_disaster_level = source.current_disaster_level.max(target.current_disaster_level);
-        RulesEngine::validate_disaster_level_for_transfer(max_disaster_level, is_direct, &requester.role)?;
-
-        if let Some(ref xid) = transit_district_id {
-            let xeno = self.district_repo.find_by_id(xid).await?.unwrap();
-            let xeno_stock = self.resource_repo.find_district_resource(xid, &res_type.id).await?;
-            let is_deficit = xeno_stock.map(|s| s.current_quantity <= RulesEngine::calculate_min_retention(s.initial_quantity, s.min_retention_pct)).unwrap_or(false);
-            RulesEngine::validate_xeno_transit_allowance(xeno.current_disaster_level, is_deficit)?;
-        }
-
-        let source_stock = self.resource_repo.find_district_resource(&source.id, &res_type.id).await?
-            .ok_or_else(|| AppError::NotFound(format!("Stock de {} non initialise pour {}.", resource_code, source.code)))?;
-
-        RulesEngine::validate_retention(
-            &source.code,
-            resource_code,
-            source_stock.initial_quantity,
-            source_stock.current_quantity,
-            quantity,
-            source_stock.min_retention_pct,
-        )?;
-
-        let estimated_duration = RulesEngine::calculate_transit_duration(base_minutes, requested_route_type);
-
-        let (initial_status, transit_approval) = if is_direct {
-            ("IN_TRANSIT", "NONE")
+    if !approved {
+        transfer.status = TransferStatus::Rejected;
+        save_pending(state, &transfer).await?;
+    } else {
+        ensure_level_still_allows(state, &transfer).await?;
+        if as_source {
+            transfer.source_approved = true;
         } else {
-            ("PENDING", "PENDING")
-        };
-
-        self.resource_repo.deduct_resource(&source.id, &res_type.id, quantity).await?;
-
-        let transfer_id = format!("tr_{}", Uuid::new_v4().simple());
-        let transfer = self.transfer_repo.create(
-            &transfer_id,
-            &requester.id,
-            &source.id,
-            &target.id,
-            &res_type.id,
-            quantity,
-            requested_route_type,
-            transit_district_id.as_deref(),
-            initial_status,
-            transit_approval,
-            estimated_duration,
-        ).await?;
-
-        self.ws_hub.broadcast_event(WsEvent::TransferStatusChanged {
-            transfer_id: transfer.id.clone(),
-            status: initial_status.to_string(),
-            transit_approval_status: transit_approval.to_string(),
-        });
-
-        self.ws_hub.broadcast_event(WsEvent::ResourceUpdated {
-            district_id: source.id.clone(),
-            resource_id: res_type.id.clone(),
-            current_quantity: source_stock.current_quantity - quantity,
-            reserved_quantity: source_stock.reserved_quantity,
-            available_quantity: (source_stock.current_quantity - quantity) - source_stock.reserved_quantity,
-        });
-
-        Ok(transfer)
-    }
-
-    pub async fn review_transit(
-        &self,
-        transfer_id: &str,
-        approver_role: &str,
-        approved: bool,
-    ) -> Result<TransferRequest, AppError> {
-        let transfer = self.transfer_repo.find_by_id(transfer_id).await?
-            .ok_or_else(|| AppError::NotFound(format!("Transfert '{}' introuvable.", transfer_id)))?;
-
-        if transfer.transit_approval_status != "PENDING" {
-            return Err(AppError::BadRequest("Ce transfert n'est pas en attente d'approbation de transit.".to_string()));
+            if transfer.transit_code.as_deref() == Some(XENO)
+                && transfer_repo::has_pending_need(db, XENO, &transfer.resource_code).await?
+            {
+                return Err(AppError::XenoPriority(format!(
+                    "Xeno doit d'abord satisfaire ses propres demandes en attente ({}) avant d'autoriser ce transit.",
+                    transfer.resource_name
+                )));
+            }
+            transfer.transit_approved = Some(true);
         }
-
-        if approver_role != "LC" && approver_role != "CD" {
-            return Err(AppError::InsufficientPermissions {
-                required_role: "LC ou CD".to_string(),
-                current_role: approver_role.to_string(),
-                message: "Seul le Coordonnateur Logistique (LC) ou le Directeur de Crise (CD) peut autoriser le transit.".to_string(),
-            });
-        }
-
-        if approved {
-            self.transfer_repo.update_transit_approval(transfer_id, "APPROVED").await?;
+        if transfer.source_approved && transfer.transit_approved != Some(false) {
+            dispatch(state, &mut transfer, false).await?;
         } else {
-            self.resource_repo.add_resource(&transfer.source_district_id, &transfer.resource_type_id, transfer.quantity).await?;
-            self.transfer_repo.update_status(transfer_id, "REJECTED", Some("Transit refuse par la coordination logistique.")).await?;
+            save_pending(state, &transfer).await?;
         }
+    }
+    state.hub.send(WsEvent::TransferUpdated { id: transfer.id.clone(), status: transfer.status });
+    Ok(transfer)
+}
 
-        let updated = self.transfer_repo.find_by_id(transfer_id).await?.unwrap();
+pub async fn deliver(state: &AppState, user: &AuthUser, id: &str) -> Result<Transfer, AppError> {
+    let mut transfer = transfer_repo::find(&state.db, id).await?;
+    if transfer.status != TransferStatus::InTransit {
+        return Err(AppError::Validation("Seul un convoi en route peut être réceptionné.".into()));
+    }
+    if user.role == Role::QC && !user.is_qc_of(&transfer.target_code) {
+        return Err(AppError::PermissionDenied(
+            "Seul le QC destinataire, le LC ou le CD peut confirmer la réception.".into(),
+        ));
+    }
+    transfer.status = TransferStatus::Delivered;
+    transfer.delivered_at = Some(Utc::now());
 
-        self.ws_hub.broadcast_event(WsEvent::TransferStatusChanged {
-            transfer_id: transfer_id.to_string(),
-            status: updated.status.clone(),
-            transit_approval_status: updated.transit_approval_status.clone(),
+    let mut tx = state.db.begin().await?;
+    if !transfer_repo::update(&mut *tx, &transfer, TransferStatus::InTransit).await? {
+        return Err(AppError::Validation("Ce convoi a déjà été réceptionné.".into()));
+    }
+    resource_repo::deposit(&mut *tx, &transfer.target_code, &transfer.resource_code, transfer.quantity).await?;
+    tx.commit().await?;
+
+    broadcast_stock(state, &transfer.target_code, &transfer.resource_code).await?;
+    state.hub.send(WsEvent::TransferUpdated { id: transfer.id.clone(), status: transfer.status });
+    Ok(transfer)
+}
+
+async fn dispatch(state: &AppState, transfer: &mut Transfer, is_new: bool) -> Result<(), AppError> {
+    let stock = resource_repo::find(&state.db, &transfer.source_code, &transfer.resource_code).await?;
+    rules::check_withdrawal(&stock, transfer.quantity)?;
+    let now = Utc::now();
+    transfer.status = TransferStatus::InTransit;
+    transfer.departed_at = Some(now);
+    transfer.arrival_at = Some(now + Duration::minutes(transfer.duration_minutes));
+
+    let mut tx = state.db.begin().await?;
+    let saved = if is_new {
+        transfer_repo::insert(&mut *tx, transfer).await?;
+        true
+    } else {
+        transfer_repo::update(&mut *tx, transfer, TransferStatus::Pending).await?
+    };
+    if !saved || !resource_repo::withdraw(&mut *tx, &stock, transfer.quantity).await? {
+        return Err(AppError::ResourceConflict("Le stock ou le transfert a changé entre-temps, réessayez.".into()));
+    }
+    tx.commit().await?;
+    broadcast_stock(state, &transfer.source_code, &transfer.resource_code).await
+}
+
+async fn save_pending(state: &AppState, transfer: &Transfer) -> Result<(), AppError> {
+    if !transfer_repo::update(&state.db, transfer, TransferStatus::Pending).await? {
+        return Err(AppError::Validation("Ce transfert n'est plus en attente.".into()));
+    }
+    Ok(())
+}
+
+async fn ensure_level_still_allows(state: &AppState, transfer: &Transfer) -> Result<(), AppError> {
+    let level = district_repo::city_level(&state.db).await?;
+    let adjacent = district_repo::topology(&state.db)
+        .await?
+        .are_adjacent(&transfer.source_code, &transfer.target_code);
+    let required = if adjacent { 3 } else { 4 };
+    if level < required {
+        return Err(AppError::LevelRestricted(format!(
+            "Le niveau {level} gèle ce transfert : niveau {required} minimum."
+        )));
+    }
+    Ok(())
+}
+
+async fn ensure_no_adjacent_supplier(state: &AppState, topology: &Topology, request: &NewTransfer) -> Result<(), AppError> {
+    for neighbor in topology.neighbors(&request.target) {
+        let stock = resource_repo::find(&state.db, neighbor, &request.resource).await?;
+        if stock.transferable >= request.quantity {
+            return Err(AppError::AdjacencyPriority(format!(
+                "{neighbor}, adjacent à {}, dispose de {} × {} transférable(s) : il doit être sollicité en priorité.",
+                request.target, stock.transferable, stock.resource_name
+            )));
+        }
+    }
+    Ok(())
+}
+
+async fn notify_contention(state: &AppState, transfer: &Transfer) -> Result<(), AppError> {
+    let contenders = transfer_repo::pending_requests(&state.db, &transfer.source_code, &transfer.resource_code).await?;
+    if contenders.len() > 1 {
+        state.hub.send(WsEvent::ResourceConflict {
+            district: transfer.source_code.clone(),
+            resource: transfer.resource_code.clone(),
+            message: format!(
+                "{} demandes concurrentes visent {} de {}.",
+                contenders.len(),
+                transfer.resource_name,
+                transfer.source_code
+            ),
+            contenders,
         });
-
-        Ok(updated)
     }
-
-    pub async fn complete_delivery(&self, transfer_id: &str) -> Result<TransferRequest, AppError> {
-        let transfer = self.transfer_repo.find_by_id(transfer_id).await?
-            .ok_or_else(|| AppError::NotFound(format!("Transfert '{}' introuvable.", transfer_id)))?;
-
-        if transfer.status != "IN_TRANSIT" {
-            return Err(AppError::BadRequest("Seul un convoi en cours de transit ('IN_TRANSIT') peut etre receptionne.".to_string()));
-        }
-
-        self.resource_repo.add_resource(&transfer.target_district_id, &transfer.resource_type_id, transfer.quantity).await?;
-        self.transfer_repo.update_status(transfer_id, "DELIVERED", None).await?;
-
-        let updated = self.transfer_repo.find_by_id(transfer_id).await?.unwrap();
-
-        if let Some(target_stock) = self.resource_repo.find_district_resource(&transfer.target_district_id, &transfer.resource_type_id).await? {
-            self.ws_hub.broadcast_event(WsEvent::ResourceUpdated {
-                district_id: transfer.target_district_id.clone(),
-                resource_id: transfer.resource_type_id.clone(),
-                current_quantity: target_stock.current_quantity,
-                reserved_quantity: target_stock.reserved_quantity,
-                available_quantity: target_stock.current_quantity - target_stock.reserved_quantity,
-            });
-        }
-
-        self.ws_hub.broadcast_event(WsEvent::TransferStatusChanged {
-            transfer_id: transfer_id.to_string(),
-            status: "DELIVERED".to_string(),
-            transit_approval_status: updated.transit_approval_status.clone(),
-        });
-
-        Ok(updated)
-    }
-
-    pub async fn list_transfers(&self) -> Result<Vec<TransferRequestDetail>, AppError> {
-        self.transfer_repo.find_all_detailed().await
-    }
-
-    async fn resolve_district(&self, identifier: &str) -> Result<crate::domain::District, AppError> {
-        if let Some(d) = self.district_repo.find_by_code(identifier).await? {
-            return Ok(d);
-        }
-        if let Some(d) = self.district_repo.find_by_id(identifier).await? {
-            return Ok(d);
-        }
-        Err(AppError::NotFound(format!("Quartier '{}' introuvable.", identifier)))
-    }
+    Ok(())
 }
