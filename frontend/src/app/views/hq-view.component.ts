@@ -35,7 +35,7 @@ import { KaijuWsService } from '../services/kaiju-ws.service';
 
       <div class="fixed inset-0 z-0 pt-12 flex">
         <aside class="relative h-full shrink-0 overflow-hidden bg-black transition-[width,min-width] duration-300 ease-out"
-               [ngClass]="context.sidebarCollapsed() ? 'w-0 min-w-0 border-r-0' : 'w-2/5 min-w-[360px] border-r border-zinc-800'"
+               [ngClass]="context.sidebarCollapsed() ? 'w-0 min-w-0 border-r-0' : 'w-full sm:w-2/5 min-w-0 sm:min-w-[360px] border-r border-zinc-800'"
                [attr.aria-hidden]="context.sidebarCollapsed()"
                [attr.inert]="context.sidebarCollapsed() ? '' : null">
           <app-bo-sidebar class="block h-full w-full"></app-bo-sidebar>

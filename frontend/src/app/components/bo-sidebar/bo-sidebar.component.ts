@@ -30,7 +30,7 @@ interface SummaryGauge {
   standalone: true,
   imports: [CommonModule, BoDonutComponent, BoResourceCardComponent],
   template: `
-    <section data-testid="bo-sidebar" class="h-full w-full min-w-[360px] flex flex-col bg-black text-zinc-300 font-mono text-xs select-none">
+    <section data-testid="bo-sidebar" class="h-full w-full min-w-0 sm:min-w-[360px] flex flex-col bg-black text-zinc-300 font-mono text-xs select-none">
       <header class="shrink-0 border-b border-zinc-800 bg-zinc-950/80">
         <div class="h-8 px-3 flex items-center gap-2 border-b border-zinc-900">
           <span class="px-1.5 py-px bg-green-500 text-black text-[10px] font-bold tracking-widest">[BO]</span>

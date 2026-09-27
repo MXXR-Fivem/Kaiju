@@ -10,7 +10,7 @@ import { LEVEL_COLORS, LEVEL_LABELS } from '../../models/kaiju.models';
   standalone: true,
   template: `
     <header class="fixed top-0 left-0 right-0 h-12 bg-black/95 border-b border-zinc-800 z-50 px-3 flex items-center justify-between text-xs font-mono select-none">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 shrink-0">
         <span class="font-bold tracking-widest text-white uppercase text-sm">KAIJU</span>
         <span data-testid="city-level" class="px-2 py-0.5 border text-[10px] font-bold uppercase tracking-wider"
               [style.border-color]="levelColor()" [style.color]="levelColor()">
@@ -22,24 +22,24 @@ import { LEVEL_COLORS, LEVEL_LABELS } from '../../models/kaiju.models';
         </span>
       </div>
 
-      <nav class="flex items-center gap-1.5">
-        <button class="hud-tab" [class.hud-tab-active]="!context.sidebarCollapsed()" (click)="context.toggleSidebar()">
+      <nav class="flex items-center gap-1.5 min-w-0 overflow-x-auto hud-tabs-scroll">
+        <button class="hud-tab shrink-0" [class.hud-tab-active]="!context.sidebarCollapsed()" (click)="context.toggleSidebar()">
           Stocks (BO)
         </button>
         @for (item of windows; track item.id) {
-          <button class="hud-tab" [class.hud-tab-active]="hud.windows()[item.id].isOpen" (click)="hud.toggle(item.id)">
+          <button class="hud-tab shrink-0" [class.hud-tab-active]="hud.windows()[item.id].isOpen" (click)="hud.toggle(item.id)">
             {{ item.label }}
             @if (item.id === 'alerts' && ws.alerts().length > 0) {
               <span class="ml-1 text-amber-400">{{ ws.alerts().length }}</span>
             }
           </button>
         }
-        <button class="hud-tab" (click)="hud.resetLayout()">Reset HUD</button>
+        <button class="hud-tab shrink-0" (click)="hud.resetLayout()">Reset HUD</button>
       </nav>
 
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 shrink-0">
         @if (auth.user(); as user) {
-          <span data-testid="current-user" class="text-green-400 text-[11px]">
+          <span data-testid="current-user" class="text-green-400 text-[11px] hidden sm:inline">
             [{{ user.role }}{{ user.district ? ' · ' + user.district : '' }}] {{ user.username }}
           </span>
         }

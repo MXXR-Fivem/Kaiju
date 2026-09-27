@@ -182,6 +182,27 @@ html, body {
   background: linear-gradient(135deg, transparent 50%, #22c55e 50%);
 }
 
+.hud-tabs-scroll {
+  scrollbar-width: none;
+}
+
+.hud-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .hud-window-shadow {
+    left: 0 !important;
+    top: 3rem !important;
+    width: 100vw !important;
+    height: calc(100vh - 3rem) !important;
+  }
+
+  .hud-resize-handle {
+    display: none;
+  }
+}
+
 .leaflet-overlay-pane path.kaiju-sector-selected {
   stroke-dasharray: 6 4;
   animation: kaiju-sector-march 0.8s linear infinite, kaiju-sector-shine 2s ease-out 1 forwards;
