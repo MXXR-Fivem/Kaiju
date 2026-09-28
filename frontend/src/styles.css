@@ -43,6 +43,13 @@
 :root {
   --crisis-accent: #22c55e;
   --crisis-glow: rgba(34, 197, 94, 0.2);
+  --topbar-h: 4.5rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --topbar-h: 3rem;
+  }
 }
 
 html, body {
@@ -193,13 +200,17 @@ html, body {
 @media (max-width: 640px) {
   .hud-window-shadow {
     left: 0 !important;
-    top: 3rem !important;
+    top: var(--topbar-h) !important;
     width: 100vw !important;
-    height: calc(100vh - 3rem) !important;
+    height: calc(100dvh - var(--topbar-h)) !important;
   }
 
   .hud-resize-handle {
     display: none;
+  }
+
+  .military-reticle > div {
+    transform: scale(0.75);
   }
 }
 

@@ -26,7 +26,7 @@ const RESOURCE_EMOJIS: Record<string, string> = {
 };
 
 const DEFAULT_CENTER: L.LatLngTuple = [35.6720, 139.7450];
-const DEFAULT_ZOOM = 14;
+const DEFAULT_ZOOM = window.innerWidth < 640 ? 13 : 14;
 const FOCUS_MAX_ZOOM = 15;
 const MIN_ZOOM_FLOOR = 10.75;
 const FOCUS_ZOOM_OUT_FACTOR = 1.5;
@@ -47,14 +47,14 @@ type LatLngRing = [number, number][];
       <div #mapContainer class="w-full h-full z-0 bg-neutral-900"></div>
 
       <div *ngIf="context.disasters().length > 0"
-           class="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100%-8rem)] px-4 py-1.5 bg-black/95 border border-red-600 border-t-2 border-t-red-500 text-red-400 font-mono text-xs flex items-center gap-3 shadow-2xl animate-pulse">
+           class="absolute top-2 sm:top-3 left-2 sm:left-1/2 sm:-translate-x-1/2 z-40 max-w-[calc(100%-3.75rem)] sm:max-w-[calc(100%-8rem)] px-2.5 sm:px-4 py-1 sm:py-1.5 bg-black/95 border border-red-600 border-t-2 border-t-red-500 text-red-400 font-mono text-[10px] sm:text-xs flex items-center gap-3 shadow-2xl animate-pulse">
         <span class="w-2 h-2 bg-red-500 animate-ping"></span>
         <span *ngFor="let disaster of context.disasters()" class="font-bold tracking-widest uppercase">
           {{ disasterLabels[disaster.disaster_type] }} — {{ districtName(disaster.district_code) }} [NIVEAU {{ disaster.level }}]
         </span>
       </div>
 
-      <div class="absolute right-3 top-3 z-40 flex flex-col gap-1.5 p-1 bg-black/90 border border-zinc-800 select-none">
+      <div class="absolute right-2 sm:right-3 top-2 sm:top-3 z-40 flex flex-col gap-1 sm:gap-1.5 p-1 bg-black/90 border border-zinc-800 select-none">
         <div class="text-[8px] uppercase tracking-widest text-zinc-500 text-center pb-0.5 border-b border-zinc-800">
           CALQ
         </div>
@@ -62,7 +62,7 @@ type LatLngRing = [number, number][];
         <button *ngFor="let layer of tacticalLayers"
                 (click)="setLayer(layer.id)"
                 [title]="layer.label"
-                class="w-8 h-8 flex items-center justify-center border transition-all text-xs"
+                class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center border transition-all text-xs"
                 [ngClass]="context.activeTacticalLayer() === layer.id 
                   ? 'border-green-500 bg-green-500 text-black' 
                   : 'border-zinc-800 bg-black text-zinc-400 hover:border-zinc-600 hover:text-white'">
@@ -92,18 +92,18 @@ type LatLngRing = [number, number][];
         </button>
       </div>
 
-      <div class="absolute bottom-3 left-3 z-30 max-w-[calc(100%-1.5rem)] sm:max-w-[calc(100%-15rem)] px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] text-zinc-400 flex items-center gap-2">
+      <div class="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 z-30 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-15rem)] px-2.5 sm:px-3 py-1.5 sm:py-2 bg-black/90 border border-zinc-800 text-[10px] text-zinc-400 flex items-center gap-2">
         <span class="shrink-0 text-green-500 font-bold">[{{ currentLayer().tag }}]</span>
         <span class="shrink-0 uppercase tracking-wider text-zinc-300">{{ currentLayer().label }}</span>
         <span class="shrink-0 text-zinc-600">·</span>
         <span class="min-w-0 truncate">{{ layerMetrics() }}</span>
       </div>
 
-      <div class="absolute bottom-3 right-3 z-30 flex flex-col items-end gap-1.5">
-        <div class="px-3 py-2 bg-black/90 border border-zinc-800 text-[10px] space-y-0.5">
-          <div *ngFor="let level of [1, 2, 3, 4, 5]" class="flex items-center gap-2">
-            <span class="w-3 h-3" [style.background-color]="levelColors[level]"></span>
-            <span class="text-zinc-300">{{ level }} · {{ levelLabels[level] }}</span>
+      <div class="absolute bottom-11 sm:bottom-3 right-2 sm:right-3 z-30 flex flex-col items-end gap-1.5">
+        <div class="px-2 sm:px-3 py-1.5 sm:py-2 bg-black/90 border border-zinc-800 text-[10px] flex sm:block gap-2 sm:gap-0 sm:space-y-0.5">
+          <div *ngFor="let level of [1, 2, 3, 4, 5]" class="flex items-center gap-1 sm:gap-2">
+            <span class="w-2.5 h-2.5 sm:w-3 sm:h-3" [style.background-color]="levelColors[level]"></span>
+            <span class="text-zinc-300">{{ level }}<span class="hidden sm:inline"> · {{ levelLabels[level] }}</span></span>
           </div>
         </div>
 

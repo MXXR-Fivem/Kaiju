@@ -9,12 +9,12 @@ import { LEVEL_COLORS, LEVEL_LABELS } from '../../models/kaiju.models';
   selector: 'app-hud-topbar',
   standalone: true,
   template: `
-    <header class="fixed top-0 left-0 right-0 h-12 bg-black/95 border-b border-zinc-800 z-50 px-3 flex items-center justify-between text-xs font-mono select-none">
-      <div class="flex items-center gap-3 shrink-0">
+    <header class="fixed top-0 left-0 right-0 h-[var(--topbar-h)] bg-black/95 border-b border-zinc-800 z-50 px-3 flex flex-wrap sm:flex-nowrap items-center content-center gap-y-1 justify-between text-xs font-mono select-none">
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
         <span class="font-bold tracking-widest text-white uppercase text-sm">KAIJU</span>
         <span data-testid="city-level" class="px-2 py-0.5 border text-[10px] font-bold uppercase tracking-wider"
               [style.border-color]="levelColor()" [style.color]="levelColor()">
-          Niveau {{ context.cityLevel() }} — {{ levelLabel() }}
+          Niveau {{ context.cityLevel() }}<span class="hidden sm:inline"> — {{ levelLabel() }}</span>
         </span>
         <span class="text-[10px] text-zinc-400 tracking-widest hidden lg:block">{{ clock }}</span>
         <span class="text-[10px]" [class.text-green-500]="ws.isConnected()" [class.text-red-500]="!ws.isConnected()">
@@ -22,7 +22,7 @@ import { LEVEL_COLORS, LEVEL_LABELS } from '../../models/kaiju.models';
         </span>
       </div>
 
-      <nav class="flex items-center gap-1.5 min-w-0 overflow-x-auto hud-tabs-scroll">
+      <nav class="order-last sm:order-none w-full sm:w-auto flex items-center gap-1.5 min-w-0 overflow-x-auto hud-tabs-scroll">
         <button class="hud-tab shrink-0" [class.hud-tab-active]="!context.sidebarCollapsed()" (click)="context.toggleSidebar()">
           Stocks (BO)
         </button>
@@ -34,7 +34,7 @@ import { LEVEL_COLORS, LEVEL_LABELS } from '../../models/kaiju.models';
             }
           </button>
         }
-        <button class="hud-tab shrink-0" (click)="hud.resetLayout()">Reset HUD</button>
+        <button class="hud-tab shrink-0 hidden sm:block" (click)="hud.resetLayout()">Reset HUD</button>
       </nav>
 
       <div class="flex items-center gap-2 shrink-0">

@@ -11,15 +11,15 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
   imports: [CommonModule, ResourceIconComponent, BoDonutComponent, BoCapacityBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <article class="relative border bg-zinc-950/70 p-2.5 transition-colors duration-300 hover:bg-zinc-900/60"
+    <article class="relative border bg-zinc-950/70 p-2 sm:p-2.5 transition-colors duration-300 hover:bg-zinc-900/60"
              [attr.data-testid]="'stock-' + stock.code"
              [ngClass]="stock.gauge.level === 'CRITICAL' ? 'border-red-900/80 border-l-2 border-l-red-500' : 'border-zinc-800 hover:border-zinc-600'">
-      <div class="flex items-start gap-3">
-        <div class="flex-1 min-w-0 space-y-2">
+      <div class="flex items-start gap-2 sm:gap-3">
+        <div class="flex-1 min-w-0 space-y-1.5 sm:space-y-2">
           <div class="flex items-start gap-2">
-            <div class="w-12 h-12 shrink-0 flex items-center justify-center border bg-black"
+            <div class="w-10 h-10 sm:w-12 sm:h-12 shrink-0 flex items-center justify-center border bg-black"
                  [ngClass]="[tone.text, tone.border]">
-              <app-resource-icon [code]="stock.code" [size]="40"></app-resource-icon>
+              <app-resource-icon [code]="stock.code" [size]="iconSize"></app-resource-icon>
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
@@ -96,11 +96,11 @@ import { DistrictSlice, LEVEL_STYLES, LevelStyle, StockView } from './bo-stock.u
         </div>
 
         <div class="flex flex-col items-center gap-1 pt-0.5">
-          <app-bo-donut [segments]="donut" [size]="58" [thickness]="3.6">
+          <app-bo-donut [segments]="donut" [size]="donutSize" [thickness]="3.6">
             <span class="text-[12px] font-bold tabular-nums" [ngClass]="tone.text">{{ stock.gauge.availablePct | number:'1.0-0' }}%</span>
-            <span class="text-[7px] text-zinc-500 tracking-widest mt-0.5">DISPO</span>
+            <span class="hidden sm:block text-[7px] text-zinc-500 tracking-widest mt-0.5">DISPO</span>
           </app-bo-donut>
-          <div class="text-[8px] text-zinc-600 tracking-widest tabular-nums">
+          <div class="hidden sm:block text-[8px] text-zinc-600 tracking-widest tabular-nums">
             CONSO {{ stock.gauge.consumedPct | number:'1.0-0' }}%
           </div>
         </div>
@@ -113,6 +113,8 @@ export class BoResourceCardComponent implements OnChanges {
   @Input() showDistricts = false;
   @Output() districtSelect = new EventEmitter<string>();
 
+  readonly iconSize = window.innerWidth < 640 ? 32 : 40;
+  readonly donutSize = window.innerWidth < 640 ? 44 : 58;
   tone: LevelStyle = LEVEL_STYLES.NONE;
   donut: DonutSegment[] = [];
 

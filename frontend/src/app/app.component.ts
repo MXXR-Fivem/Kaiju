@@ -11,6 +11,7 @@ import { RouterOutlet } from '@angular/router';
       display: block;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
     }
   `]

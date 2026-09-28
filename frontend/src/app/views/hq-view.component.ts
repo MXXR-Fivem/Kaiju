@@ -30,10 +30,10 @@ import { KaijuWsService } from '../services/kaiju-ws.service';
     BoSidebarComponent
   ],
   template: `
-    <div class="relative w-screen h-screen overflow-hidden bg-black font-mono select-none">
+    <div class="relative w-screen h-[100dvh] overflow-hidden bg-black font-mono select-none">
       <app-hud-topbar></app-hud-topbar>
 
-      <div class="fixed inset-0 z-0 pt-12 flex">
+      <div class="fixed inset-0 z-0 pt-[var(--topbar-h)] flex">
         <aside class="relative h-full shrink-0 overflow-hidden bg-black transition-[width,min-width] duration-300 ease-out"
                [ngClass]="context.sidebarCollapsed() ? 'w-0 min-w-0 border-r-0' : 'w-full sm:w-2/5 min-w-0 sm:min-w-[360px] border-r border-zinc-800'"
                [attr.aria-hidden]="context.sidebarCollapsed()"

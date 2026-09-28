@@ -32,23 +32,23 @@ interface SummaryGauge {
   template: `
     <section data-testid="bo-sidebar" class="h-full w-full min-w-0 sm:min-w-[360px] flex flex-col bg-black text-zinc-300 font-mono text-xs select-none">
       <header class="shrink-0 border-b border-zinc-800 bg-zinc-950/80">
-        <div class="h-8 px-3 flex items-center gap-2 border-b border-zinc-900">
+        <div class="h-9 sm:h-8 px-3 flex items-center gap-2 border-b border-zinc-900">
           <span class="px-1.5 py-px bg-green-500 text-black text-[10px] font-bold tracking-widest">[BO]</span>
           <span class="text-[10px] text-zinc-400 tracking-widest uppercase truncate">Logistique · État des stocks</span>
           <div class="ml-auto flex items-center gap-1.5">
-            <span class="text-[9px] tracking-widest tabular-nums text-zinc-500">
+            <span class="hidden sm:inline text-[9px] tracking-widest tabular-nums text-zinc-500">
               [SYNC {{ lastSync() }}]
             </span>
             <button type="button"
                     (click)="refresh()"
                     title="Rafraichir les stocks"
-                    class="px-1.5 py-0.5 border border-zinc-800 hover:border-zinc-500 text-zinc-400 hover:text-white text-[9px] tracking-widest uppercase transition-colors">
+                    class="px-2 sm:px-1.5 py-1 sm:py-0.5 border border-zinc-800 hover:border-zinc-500 text-zinc-400 hover:text-white text-[9px] tracking-widest uppercase transition-colors">
               RAFRAICHIR
             </button>
             <button type="button"
                     (click)="context.toggleSidebar()"
                     title="Replier le panneau BO"
-                    class="w-6 h-5 flex items-center justify-center border border-zinc-800 hover:border-green-500 text-zinc-400 hover:text-green-400 text-[10px] transition-colors">
+                    class="w-7 sm:w-6 h-6 sm:h-5 flex items-center justify-center border border-zinc-800 hover:border-green-500 text-zinc-400 hover:text-green-400 text-[10px] transition-colors">
               &lt;&lt;
             </button>
           </div>
@@ -58,12 +58,12 @@ interface SummaryGauge {
           <div class="text-[9px] text-zinc-500 tracking-widest uppercase">SECTEUR ACTIF</div>
           <div class="flex items-baseline gap-2 mt-0.5 min-w-0">
             <ng-container *ngIf="selectedCode() as code; else globalTitle">
-              <span class="text-lg font-bold text-green-400 tracking-widest">[{{ code }}]</span>
+              <span class="text-base sm:text-lg font-bold text-green-400 tracking-widest">[{{ code }}]</span>
               <span class="text-sm font-bold text-white tracking-widest uppercase truncate">{{ districtName(code) }}</span>
             </ng-container>
             <ng-template #globalTitle>
               <span class="text-sm font-bold text-white tracking-widest uppercase truncate">Tokyork · Vue globale</span>
-              <span class="text-[9px] text-zinc-500 tracking-widest shrink-0">{{ districtCodes.length }} QUARTIERS AGREGES</span>
+              <span class="hidden sm:inline text-[9px] text-zinc-500 tracking-widest shrink-0">{{ districtCodes.length }} QUARTIERS AGREGES</span>
             </ng-template>
           </div>
 
@@ -72,7 +72,7 @@ interface SummaryGauge {
                     role="tab"
                     [attr.aria-selected]="selectedCode() === null"
                     (click)="selectDistrict(null)"
-                    class="px-2 py-1 border text-[10px] font-bold tracking-widest uppercase transition-colors"
+                    class="px-2 py-1.5 sm:py-1 border text-[10px] font-bold tracking-widest uppercase transition-colors"
                     [ngClass]="selectedCode() === null ? 'bg-green-500 text-black border-green-500' : 'bg-black text-zinc-400 border-zinc-800 hover:border-green-500 hover:text-green-400'">
               GLOBAL
             </button>
@@ -83,7 +83,7 @@ interface SummaryGauge {
                     [attr.aria-selected]="selectedCode() === code"
                     (click)="selectDistrict(code)"
                     [title]="districtName(code)"
-                    class="flex-1 px-1 py-1 border text-[10px] font-bold tracking-widest uppercase transition-colors flex items-center justify-center gap-1"
+                    class="flex-1 px-1 py-1.5 sm:py-1 border text-[10px] font-bold tracking-widest uppercase transition-colors flex items-center justify-center gap-1"
                     [ngClass]="selectedCode() === code ? 'bg-green-500 text-black border-green-500' : 'bg-black text-zinc-400 border-zinc-800 hover:border-green-500 hover:text-green-400'">
               <span>{{ code }}</span>
               <span *ngIf="districtCriticalCount()[code] as n"
@@ -102,14 +102,14 @@ interface SummaryGauge {
             <span class="text-[9px] text-zinc-500 tracking-widest uppercase">SYNTHESE CAPACITAIRE</span>
             <span class="text-[9px] text-zinc-600 tracking-widest uppercase">MOY. {{ summary().measured }} RESSOURCES</span>
           </div>
-          <div class="grid grid-cols-4 gap-2">
+          <div class="grid grid-cols-4 gap-1.5 sm:gap-2">
             <div *ngFor="let g of summaryGauges(); trackBy: trackById"
                  class="flex flex-col items-center gap-1 border border-zinc-900 bg-zinc-950/60 py-2 px-1 min-w-0">
-              <app-bo-donut [segments]="g.segments" [size]="62" [thickness]="3.4">
+              <app-bo-donut [segments]="g.segments" [size]="donutSize" [thickness]="3.4">
                 <span class="text-[12px] font-bold tabular-nums" [ngClass]="g.valueCls">{{ g.value }}</span>
               </app-bo-donut>
               <div class="text-[9px] font-bold text-zinc-300 tracking-widest uppercase text-center truncate w-full">{{ g.label }}</div>
-              <div class="text-[8px] text-zinc-600 tracking-wider uppercase text-center truncate w-full">{{ g.sublabel }}</div>
+              <div class="hidden sm:block text-[8px] text-zinc-600 tracking-wider uppercase text-center truncate w-full">{{ g.sublabel }}</div>
             </div>
           </div>
         </div>
@@ -157,7 +157,7 @@ interface SummaryGauge {
         </div>
       </div>
 
-      <footer class="shrink-0 h-7 px-3 border-t border-zinc-800 bg-zinc-950/80 flex items-center gap-3 text-[9px] tracking-widest uppercase">
+      <footer class="shrink-0 min-h-7 py-1 px-3 border-t border-zinc-800 bg-zinc-950/80 flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-0.5 text-[9px] tracking-widest uppercase">
         <span [ngClass]="summary().criticalCount > 0 ? 'text-red-400' : 'text-zinc-500'">
           [CRITIQUE {{ summary().criticalCount }}]
         </span>
@@ -168,7 +168,7 @@ interface SummaryGauge {
           [VIGILANCE {{ summary().watchCount }}]
         </span>
         <span class="ml-auto" [ngClass]="ws.isConnected() ? 'text-green-500' : 'text-red-500'">
-          [FLUX TEMPS REEL {{ ws.isConnected() ? 'ACTIF' : 'COUPE' }}]
+          [FLUX<span class="hidden sm:inline"> TEMPS REEL</span> {{ ws.isConnected() ? 'ACTIF' : 'COUPE' }}]
         </span>
       </footer>
     </section>
@@ -179,6 +179,7 @@ export class BoSidebarComponent {
   readonly ws = inject(KaijuWsService);
 
   readonly districtCodes = DISTRICT_CODES;
+  readonly donutSize = window.innerWidth < 640 ? 48 : 62;
   readonly sortMode = signal<SortMode>('CATALOGUE');
   readonly lastSync = computed(() => {
     this.context.stocks();
