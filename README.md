@@ -1,5 +1,7 @@
 # KAIJU — Crisis Manager
 
+> 🎓 **Projet Epitech** (B-SPE-331)
+
 Plateforme de coordination des ressources d'urgence de Tokyork : réservations, transferts entre quartiers, niveaux de catastrophe et alertes en temps réel.
 
 **Application déployée :** https://kaiju.busiristheo.com
